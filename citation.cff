@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "Please cite this repo as below.  "
+authors:
+- family-names: "Creaner"
+  given-names: "Oisín"
+  orcid: "https://orcid.org/0000-0002-1080-0090"
+
+title: "Astronomical Bycatch"
+version: 0
+date-released: 2026-04-29
+url: "https://github.com/creanero/bycatch"
