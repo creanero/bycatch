@@ -1,0 +1,12 @@
+# THE PRIMARY CONTRIBUTOR OF THIS WORK IS *D.LAWLEY* WITH ADAPTATIONS MADE FROM *DEAN WINTERS*
+# - Dean Winters - - dean.winters4@mail.dcu.ie - - May 2026
+
+# Use:
+# pip install -r requirements.txt
+# to install dependencies
+
+astropy
+photutils
+astroalign
+numpy
+matplotlib
