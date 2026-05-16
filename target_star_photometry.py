@@ -330,7 +330,7 @@ def plot_target_star_photometry(lc_table):
     rms = np.std(oot_flux)
     print(rms)
 
-def run_pipeline():
+def execute_target_star_photometry():
 
     # change working directory to directory containing fits folder
     os.chdir(WORKING_DIR) #DEAN: was os.chdir("/Users/xxx/Downloads/Research_Project/photmetry_data/Hat_P_32_Dec202017.FITS")
@@ -343,7 +343,7 @@ def run_pipeline():
 
 if __name__ == "__main__":
     start_time = time.time()
-    run_pipeline()
+    execute_target_star_photometry()
     print("Runtime:", time.time() - start_time, "seconds")
 
 
