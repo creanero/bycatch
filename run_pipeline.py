@@ -22,14 +22,14 @@
 
 # The notebook has the steps of these scripts annotated and describes the pipeline in more depth
 
-
-# runpy.run_path is used so each script runs indivudally like if you were running from a command line
-import runpy
+import time
+import target_star_photometry
+import bycatch_photometry #DEAN: need to rename bycatch-photometry to remove the hyphen otherwise this cannot import
 
 print("Phase 1: Target star photometry and alignment:")
-runpy.run_path("target_star_photometry.py")
+target_star_photometry.execute_target_star_photometry()
 
 print("\n Phase 2: Bycatch photometry:")
-runpy.run_path("bycatch-photometry.py")
+bycatch_photometry.execute_bycatch_photometry()
 
 print("\n=== Pipeline complete ===")
