@@ -35,7 +35,7 @@ from astropy.stats import sigma_clipped_stats
 import os
 
 #DEAN: hyperparams sourced from config.py instead of being hardcoded in the individual files
-from config import WORKING_DIR, ALIGNED_FOLDER, APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT, FWHM
+from config import WORKING_DIR, ALIGNED_FOLDER, APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT, FWHM, STAR_INDEX
 
 #DEAN: added os.chdir so ALIGNED_FOLDER resolves correctly as a relative path, like in target_star_photometry.py
 #os.chdir(WORKING_DIR)
@@ -150,7 +150,7 @@ def execute_bycatch_photometry():
 
     positions     = detect_sources(aligned_fits)
     bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
-    plot_bycatch_photometry(bycatch_table, stellar_index=177) #DEAN: notebook used index 177; bycatch-photometry.py used 68 ... use notebook
+    plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) #DEAN: notebook used (STAR_INDEX =) index 177; bycatch-photometry.py used 68 ... use notebook
 
 
 if __name__ == "__main__":
