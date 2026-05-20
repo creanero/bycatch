@@ -84,6 +84,11 @@ def align_images(RAW_DATA_FOLDER):
         base = os.path.basename(f)
         new_name = os.path.join(ALIGNED_FOLDER, base) #DEAN: was os.path.join("aligned-images", base)
 
+        #DEAN: unsure if this is a local issue however sometimes Windows can lock this file;
+        # set conditional to remove if already exists
+        if os.path.exists(new_name):
+            os.remove(new_name)
+        
         fits.writeto(new_name, aligned_data, header, overwrite=True)
 
         # after you have run this cell if you check your working directory you should see an additional folder with the new name you have chosen, containing the aligned images
