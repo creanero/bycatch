@@ -24,7 +24,8 @@
 # in the notebook this was the placeholder string "working directory filepath"
 
 #WORKING_DIR = "/Users/davidlawley/Downloads/Research_Project/photmetry_data/Hat_P_32_Dec202017.FITS"
-WORKING_DIR = ""
+# C:\Users\dwint\Downloads\images
+WORKING_DIR = "C:/Users/dwint/Downloads"
 
 
 
@@ -33,15 +34,15 @@ WORKING_DIR = ""
 # in target_star_photometry.py this was hard coded as "data" inside glob.glob("data/*.FITS")
 # in the master notebook this was the placehoder "image folder filepath"
 
-RAW_DATA_FOLDER = "data"
-
+RAW_DATA_FOLDER = "aligned-images" # TODO ... why is this already aligned in source code
 
 
 # Name the folder the aligned imgs will be saved into (need not previously exist, will be created automatically)
 
 # in target_star_photometry.py this was hard coded as "aligned-images"
 # in the notebook this was "name of new directory for aligned images"
-ALIGNED_FOLDER = "aligned-images"
+# C:/Users/dwint/Downloads/aligned-images
+ALIGNED_FOLDER = "aligned-images-out"
 
 
 
@@ -145,3 +146,10 @@ BIN_SIZE_SCRIPT = 6
 
 # e- read noise
 SIGMA_READ = 5
+
+
+# =============== STELLAR INDEX =================
+
+# Chosen star in bycatch_photometry.py
+
+STAR_INDEX = 177 #DEAN
