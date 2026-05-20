@@ -1,0 +1,17 @@
+message: "Please cite this GitHub repository as:  "
+authors:
+- family-names: "Creaner"
+  given-names: "Oisín"
+  orcid: "https://orcid.org/0000-0002-1080-0090"
+  
+- family-names: "Lawley"
+  given-names: "David"
+  
+- family-names: "Winters"
+  given-names: "Dean"
+  email: "dean.winters4@mail.dcu.ie"
+
+title: "Astronomical Bycatch Photometry Feasibility"
+version: 1
+date-released: 2026-05-20
+url: "https://github.com/deanwinters/Astronomical_Bycatch_Photometry/"
