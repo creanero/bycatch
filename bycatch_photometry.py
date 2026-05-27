@@ -82,7 +82,8 @@ def detect_sources(aligned_fits):
 def perform_bycatch_photometry(aligned_fits, positions):
         
     # creates an aperture around all detected sources
-    apertures = CircularAperture(positions, r=4.32)
+    #apertures = CircularAperture(positions, r=4.32)
+    apertures = CircularAperture(positions, r=APERTURE_R)
     norm = ImageNormalize(stretch=SqrtStretch())
 
     # plt.imshow(data, cmap='Greys', origin='lower', norm=norm,
