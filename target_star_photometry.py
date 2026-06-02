@@ -38,6 +38,7 @@ import time
 
 #DEAN: pull settings from config.py instead of defining locally
 from config import (RAW_DATA_FOLDER, TARGET_POSITIONS, ALIGNED_FOLDER,
+                    FWHM,
                     APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT,
                     SIGMA_READ,
                     OOT_START_NORM, OOT_END_NORM,
@@ -71,6 +72,7 @@ def align_images(RAW_DATA_FOLDER):
 
     # iterate through the fits file folder
     for f in fits_files:
+        #print(f"Aligning: {f}", flush=True) # debug: check alignment is working for each file
 
         # pulls out the flux values and header info for each fits file and stores them in memory
         data, header = fits.getdata(f, header=True)
@@ -236,6 +238,7 @@ def normalise_light_curves(lc_table):
 
     # define ingress and egress times respectively
     oot_mask = (lc_table["norm_t"] < OOT_START_NORM) | (lc_table["norm_t"] > OOT_END_NORM)  #DEAN: was (lc_table["norm_t"] < 0.06) | (lc_table["norm_t"] > 0.2)
+    lc_table["oot_mask"] = oot_mask 
     # uses the mask to normailise the baseline time so that it is now roughly 1
     baseline = np.median(lc_table["diff_T_flux"][oot_mask])
     # defines the normailised baseline as "norm_flux"
@@ -254,8 +257,8 @@ def normalise_light_curves(lc_table):
 
 def plot_target_star_photometry(lc_table):
 
-    #DEAN: initialise the mask
-    oot_mask = (lc_table["norm_t"] < OOT_START_NORM) | (lc_table["norm_t"] > OOT_END_NORM)
+    #DEAN: initialise the mask from normalise_light_curves()
+    oot_mask = lc_table["oot_mask"].astype(bool) #boolean precaution to astropy Table
 
     #DEAN: plot of the normalised flux
     plt.plot(lc_table["norm_t"], lc_table["norm_flux"], marker='.', color='gray')
@@ -278,7 +281,8 @@ def plot_target_star_photometry(lc_table):
     oot_flux = lc_table["norm_flux"][oot_mask]
     rms = np.std(oot_flux)
 
-    it_mask = (lc_table["norm_t"] > OOT_START_NORM) & (lc_table["norm_t"] < OOT_END_NORM)  #DEAN: was (lc_table["norm_t"] > 0.06) & (lc_table["norm_t"] < 0.2)
+    #it_mask = (lc_table["norm_t"] > OOT_START_NORM) & (lc_table["norm_t"] < OOT_END_NORM)  #DEAN: was (lc_table["norm_t"] > 0.06) & (lc_table["norm_t"] < 0.2)
+    it_mask = ~oot_mask # just the inverse of oot_mask
     transit_depth = 1 - np.median(lc_table["norm_flux"][it_mask])
     scatter = np.std(lc_table["norm_flux"][oot_mask])
     N = np.sum(it_mask)
