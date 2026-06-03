@@ -70,9 +70,28 @@ def align_images(RAW_DATA_FOLDER):
     # makes a new fodler in your working directory for the aligned images to be saved to
     os.makedirs(ALIGNED_FOLDER, exist_ok=True) #DEAN: was os.makedirs("aligned-images", exist_ok=True)
 
+    # DEBUG generalising the code beyond HAT P 32 ==============
+    from astropy.stats import sigma_clipped_stats
+    from photutils.detection import DAOStarFinder
+    check = fits.getdata(fits_files[0])
+    mean, median, std = sigma_clipped_stats(check, sigma=3)
+    daodebug = DAOStarFinder(fwhm=FWHM, threshold=5.*std)
+    sources = daodebug(check - median)
+    print(f"Reference image: {fits_files[0]}")
+    print(f"Sources detected: {len(sources) if sources else 0}")
+
+    check = fits.getdata(fits_files[0])
+    print(f"Shape: {check.shape}")
+    print(f"Min: {np.min(check)}, Max: {np.max(check)}, Mean: {np.mean(check):.2f}")
+    for f in fits_files[:5]:
+        d = fits.getdata(f)
+        print(f, np.min(d), np.max(d), np.mean(d))
+    
+    # ============================================= end of DEBUG
+    
     # iterate through the fits file folder
     for f in fits_files:
-        #print(f"Aligning: {f}", flush=True) # debug: check alignment is working for each file
+        print(f"Aligning: {f}", flush=True) # debug: check alignment is working for each file
 
         # pulls out the flux values and header info for each fits file and stores them in memory
         data, header = fits.getdata(f, header=True)
@@ -190,8 +209,8 @@ def perform_photometry(aligned_fits, TARGET_POSITIONS):
         sigma_e_T = sigma_e[0]
         sigma_e_C1 = sigma_e[1]
         sigma_e_C2 = sigma_e[2]
-        comp_errors = sigma_e[:1] #DEAN: this line only captures the first comp star error ... sigma_e[1:] would capture all comp stars ... perhaps this was intended?
-        #comp_errors = sigma_e[1:] #DEAN: try this TODO
+        #comp_errors = sigma_e[:1] #DEAN: this line only captures the first comp star error ... sigma_e[1:] would capture all comp stars ... perhaps this was intended?
+        comp_errors = sigma_e[1:] #DEAN: try this TODO
 
         sigma_comp = np.sqrt(np.sum(np.array(comp_errors)**2, axis=0))
 
