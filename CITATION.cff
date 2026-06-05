@@ -3,6 +3,7 @@ authors:
 - family-names: "Creaner"
   given-names: "Oisín"
   orcid: "https://orcid.org/0000-0002-1080-0090"
+  email: "oisin.creaner@dcu.ie"
   
 - family-names: "Lawley"
   given-names: "David"
@@ -11,7 +12,7 @@ authors:
   given-names: "Dean"
   email: "dean.winters4@mail.dcu.ie"
 
-title: "Astronomical Bycatch Photometry Feasibility"
+title: "Astronomical Bycatch"
 version: 1
 date-released: 2026-05-20
-url: "https://github.com/deanwinters/Astronomical_Bycatch_Photometry/"
+url: "https://github.com/creanero/bycatch/"
