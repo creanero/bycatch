@@ -1,0 +1,7 @@
+TODO 13/05/2026 14:42
+
+have a look at generation of comp_errors in target/comp phase.
+
+more generally, the next step is to first check the pipeline recovers the intended results as the original code available on GoogleDrive. `X 13/05/2026`
+
+after this, to begin "cleaning up" the code into defined functions and/or objects `X 20/05/2026`
