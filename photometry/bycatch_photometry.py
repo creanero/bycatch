@@ -11,9 +11,7 @@ import astroalign as aa
 from astropy.io import fits
 from pathlib import Path
 import glob
-#DEAN: from astropy.io import fits ... duplicate import commented out
 from photutils.aperture import CircularAnnulus, CircularAperture
-#DEAN: import matplotlib as plt ... duplicate and error-laden
 import matplotlib.pyplot as plt
 from photutils.aperture import ApertureStats
 from photutils.aperture import aperture_photometry
@@ -23,27 +21,17 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 import numpy as np
 from astropy.table import Table
-#DEAN: from photutils.aperture import aperture_photometry  ... duplicate
 from astropy.nddata import Cutout2D
 from photutils.centroids import (centroid_1dg, centroid_2dg,
                                  centroid_com, centroid_quadratic)
-#DEAN: import matplotlib.pyplot as plt ... duplicate
 from photutils.detection import DAOStarFinder
 from astropy.stats import SigmaClip
 from photutils.background import Background2D, MedianBackground
 from astropy.stats import sigma_clipped_stats
 import os
 
-#DEAN: hyperparams sourced from config.py instead of being hardcoded in the individual files
+# Hyperparams sourced from config.py
 from config import WORKING_DIR, ALIGNED_FOLDER, APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT, FWHM, STAR_INDEX
-
-#DEAN: added os.chdir so ALIGNED_FOLDER resolves correctly as a relative path, like in target_star_photometry.py
-#os.chdir(WORKING_DIR)
-
-# Load in the aligned fits images, if you do not have the images aligned they can be created using the more general "photutils-photometry" script or notebook
-# Be sure to leave the /*.FITS at the end of the file path as this is used as an identifier when iterating through the folder
-# It is also case sensitive so you might need to check if your .fits is caps or not
-#aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS")) #DEAN: was sorted(glob.glob("/Users/xxx/.../aligned-images/*.FITS"))
 
 
 def detect_sources(aligned_fits):
@@ -60,7 +48,7 @@ def detect_sources(aligned_fits):
 
     # daofind is the module from photutils that is used to detect sources present in the images
     # define the fwhm and threshold you would like to use.
-    daofind = DAOStarFinder(fwhm=FWHM, threshold=5.*std) #DEAN: was DAOStarFinder(fwhm=2.6, threshold=5.*std)
+    daofind = DAOStarFinder(fwhm=FWHM, threshold=5.*std)
     # subtract the mediaan from the "source_image" data. the vast majority of the data points in the image is taken up by background, so it is apropriate in this case to just use the median value here to background reduce.
     sources = daofind(source_image - median)
     # the loop below was copied from the phoutils user guide, it neatly formats the output table
@@ -70,7 +58,7 @@ def detect_sources(aligned_fits):
     sources.pprint(max_width=76)
 
     # if you want to view the table of sources along with their positions and so on uncomment the line below
-    # sources.pprint(max_width=76)  #DEAN: bycatch-photometry.py had this commented out; notebook had it active ... keeping notebook version active above
+    # sources.pprint(max_width=76)
 
     # to perform aperture photometry on the sources positions need to be in column order as opposed to row.
     positions = np.transpose((sources['xcentroid'], sources['ycentroid']))
@@ -82,7 +70,6 @@ def detect_sources(aligned_fits):
 def perform_bycatch_photometry(aligned_fits, positions):
         
     # creates an aperture around all detected sources
-    #apertures = CircularAperture(positions, r=4.32)
     apertures = CircularAperture(positions, r=APERTURE_R)
     norm = ImageNormalize(stretch=SqrtStretch())
 
@@ -93,8 +80,8 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
     # uses the positions of the sources present to perform aperture photometry on all sources (bycatch photometry) the same way we did earlier for target and comp stars.
 
-    aperture = CircularAperture(positions, r=APERTURE_R) #DEAN: was CircularAperture(positions, r=4.44)
-    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT) #DEAN: was CircularAnnulus(positions, r_in=7.15, r_out=12.15)
+    aperture = CircularAperture(positions, r=APERTURE_R)
+    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT) 
 
     # the Loop below works exactly the same way as it does when we are concerned with only the target and comp stars, except here we just iterate through all the sources present.
     # for information on how this loop works, see the commented photutils photometry python file / notebook.
@@ -102,7 +89,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
     for i, f in enumerate(aligned_fits, start=1):
         data, header = fits.getdata(f, header=True)
-        time = header["MJD-OBS"] #DEAN: notebook uses "time" as variable name here; bycatch-photometry.py used "time_MJD" ... use notebook
+        time = header["MJD-OBS"]
 
         phot = aperture_photometry(data, aperture)
         fluxes = phot[("aperture_sum")] # single aperture
@@ -117,9 +104,8 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
     bycatch_table = Table(
         rows=rows,
-        names=("id", "time", "fluxes") #DEAN: notebook uses "time" as variable name here; bycatch-photometry.py used "time_MJD" ... use notebook
+        names=("id", "time", "fluxes")
     )
-
     print(bycatch_table)
 
     return bycatch_table
@@ -132,8 +118,8 @@ def plot_bycatch_photometry(bycatch_table, stellar_index):
 
     end_time = time.time()
 
-    star_flux = flux_matrix[:, stellar_index] #DEAN: notebook used index 177; bycatch-photometry.py used 68
-    plt.plot(bycatch_table["time"], star_flux, '.-') #DEAN: updated col name to match table above
+    star_flux = flux_matrix[:, stellar_index] # notebook used index 177; original bycatch-photometry.py work used 68
+    plt.plot(bycatch_table["time"], star_flux, '.-') # updated col name to match table above
     plt.xlabel("Time")
     plt.ylabel("Flux")
     plt.show()
@@ -141,17 +127,17 @@ def plot_bycatch_photometry(bycatch_table, stellar_index):
 
 def execute_bycatch_photometry():
 
-    #DEAN: added os.chdir so ALIGNED_FOLDER resolves correctly as a relative path, like in target_star_photometry.py
+    # added os.chdir so ALIGNED_FOLDER resolves correctly as a relative path, like in target_star_photometry.py
     os.chdir(WORKING_DIR)
 
     # Load in the aligned fits images, if you do not have the images aligned they can be created using the more general "photutils-photometry" script or notebook
     # Be sure to leave the /*.FITS at the end of the file path as this is used as an identifier when iterating through the folder
     # It is also case sensitive so you might need to check if your .fits is caps or not
-    aligned_fits  = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS")) #DEAN: was sorted(glob.glob("/Users/xxx/.../aligned-images/*.FITS"))
 
+    aligned_fits  = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
     positions     = detect_sources(aligned_fits)
     bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
-    plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) #DEAN: notebook used (STAR_INDEX =) index 177; bycatch-photometry.py used 68 ... use notebook
+    plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) # notebook used (STAR_INDEX =) index 177; original bycatch-photometry.py work used 68 ... use notebook
 
 
 if __name__ == "__main__":
