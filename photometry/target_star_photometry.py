@@ -6,40 +6,59 @@
 # -There is some very useful information in the Exotic output files (particularly the "temp" folder) that include optimised parameters,
 # such as aperture size, annulus size, comp stars and so on, raw flux plots for comparison etc. "
 
-# Import libraries
-
-import astroalign as aa
-from astropy.io import fits
-from pathlib import Path
+# Standard
 import glob
-from photutils.aperture import CircularAnnulus, CircularAperture
-import matplotlib.pyplot as plt
-from photutils.aperture import ApertureStats
-from photutils.aperture import aperture_photometry
-from astropy.visualization import SqrtStretch
-from astropy.visualization.mpl_normalize import ImageNormalize
-from astropy import units as u
-from astropy.coordinates import SkyCoord
-import numpy as np
-from astropy.table import Table
-from astropy.nddata import Cutout2D
-from photutils.centroids import (centroid_1dg, centroid_2dg,
-                                 centroid_com, centroid_quadratic)
-from photutils.detection import DAOStarFinder
-from astropy.stats import SigmaClip
-from photutils.background import Background2D, MedianBackground
-from astropy.stats import sigma_clipped_stats
 import os
 import time
+from pathlib import Path
 
-# Pull hyperparameters from config.py
-from config import (RAW_DATA_FOLDER, TARGET_POSITIONS, ALIGNED_FOLDER,
-                    FWHM,
-                    APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT,
-                    SIGMA_READ,
-                    OOT_START_NORM, OOT_END_NORM,
-                    BIN_SIZE_SCRIPT,
-                    WORKING_DIR)
+# Scientific
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Astro
+import astroalign as aa
+
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.nddata import Cutout2D
+from astropy.stats import SigmaClip, sigma_clipped_stats
+from astropy.table import Table
+from astropy.visualization import SqrtStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
+
+# Astro Photometry
+from photutils.aperture import (
+    ApertureStats,
+    CircularAnnulus,
+    CircularAperture,
+    aperture_photometry,
+)
+from photutils.background import Background2D, MedianBackground
+from photutils.centroids import (
+    centroid_1dg,
+    centroid_2dg,
+    centroid_com,
+    centroid_quadratic,
+)
+from photutils.detection import DAOStarFinder
+
+# Local file(s)
+from config import (
+    ALIGNED_FOLDER,
+    ANNULUS_R_IN,
+    ANNULUS_R_OUT,
+    APERTURE_R,
+    BIN_SIZE_SCRIPT,
+    FWHM,
+    OOT_END_NORM,
+    OOT_START_NORM,
+    RAW_DATA_FOLDER,
+    SIGMA_READ,
+    TARGET_POSITIONS,
+    WORKING_DIR,
+)
 
 def align_images(RAW_DATA_FOLDER):
 

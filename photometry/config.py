@@ -55,7 +55,7 @@ ALIGNED_FOLDER = "aligned-images-out"
 TARGET_POSITIONS = (
   (424.4, 286.8), 
   (348, 215.5), 
-  (465, 182.6)
+  (465, 182.6),
 )
 
 

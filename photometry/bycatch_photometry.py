@@ -3,36 +3,55 @@
 
 
 
-# import libraries
-
-import time
-start_time = time.time()
-import astroalign as aa
-from astropy.io import fits
-from pathlib import Path
+# Standard
 import glob
-from photutils.aperture import CircularAnnulus, CircularAperture
+import os
+import time
+from pathlib import Path
+
+# Scientific
+import numpy as np
 import matplotlib.pyplot as plt
-from photutils.aperture import ApertureStats
-from photutils.aperture import aperture_photometry
-from astropy.visualization import SqrtStretch
-from astropy.visualization.mpl_normalize import ImageNormalize
+
+# Astro
+import astroalign as aa
+
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-import numpy as np
-from astropy.table import Table
+from astropy.io import fits
 from astropy.nddata import Cutout2D
-from photutils.centroids import (centroid_1dg, centroid_2dg,
-                                 centroid_com, centroid_quadratic)
-from photutils.detection import DAOStarFinder
-from astropy.stats import SigmaClip
+from astropy.stats import SigmaClip, sigma_clipped_stats
+from astropy.table import Table
+from astropy.visualization import SqrtStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
+
+# Astro Photometry 
+from photutils.aperture import (
+    ApertureStats,
+    CircularAnnulus,
+    CircularAperture,
+    aperture_photometry,
+)
 from photutils.background import Background2D, MedianBackground
-from astropy.stats import sigma_clipped_stats
-import os
+from photutils.centroids import (
+    centroid_1dg,
+    centroid_2dg,
+    centroid_com,
+    centroid_quadratic,
+)
+from photutils.detection import DAOStarFinder
 
-# Hyperparams sourced from config.py
-from config import WORKING_DIR, ALIGNED_FOLDER, APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT, FWHM, STAR_INDEX
-
+# Local file(s)
+from config import (
+    ALIGNED_FOLDER,
+    ANNULUS_R_IN,
+    ANNULUS_R_OUT,
+    APERTURE_R,
+    FWHM,
+    STAR_INDEX,
+    WORKING_DIR,
+)
+start_time = time.time()
 
 def detect_sources(aligned_fits):
 

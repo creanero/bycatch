@@ -22,7 +22,10 @@
 
 # The notebook has the steps of these scripts annotated and describes the pipeline in more depth
 
+# Standard
 import time
+
+# Local file(s)
 import target_star_photometry
 import bycatch_photometry
 
