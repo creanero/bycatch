@@ -23,25 +23,24 @@
 # in bycatch-photometry.py this was embedded in the glob.glob() path directly
 # in the notebook this was the placeholder string "working directory filepath"
 
-#WORKING_DIR = "/Users/davidlawley/Downloads/Research_Project/photmetry_data/Hat_P_32_Dec202017.FITS"
-# C:\Users\dwint\Downloads\images
+# Process currently reads from disk
 WORKING_DIR = "C:/Users/dwint/Downloads"
 
 
 
 # Name of the subfolder inside WORKING_DIR which contains the raw FITS images
 
-# in target_star_photometry.py this was hard coded as "data" inside glob.glob("data/*.FITS")
+# in original target_star_photometry.py work this was hard coded as "data" inside glob.glob("data/*.FITS")
 # in the master notebook this was the placehoder "image folder filepath"
 
-RAW_DATA_FOLDER = "aligned-images" # TODO ... why is this already aligned in source code
+RAW_DATA_FOLDER = "aligned-images" # TODO ... this is already aligned in source code
 
 
 # Name the folder the aligned imgs will be saved into (need not previously exist, will be created automatically)
 
 # in target_star_photometry.py this was hard coded as "aligned-images"
 # in the notebook this was "name of new directory for aligned images"
-# C:/Users/dwint/Downloads/aligned-images
+
 ALIGNED_FOLDER = "aligned-images-out"
 
 
@@ -56,7 +55,7 @@ ALIGNED_FOLDER = "aligned-images-out"
 TARGET_POSITIONS = (
   (424.4, 286.8), 
   (348, 215.5), 
-  (465, 182.6)
+  (465, 182.6),
 )
 
 
@@ -105,7 +104,7 @@ FWHM = 2.6
 # ============== OUT-OF-TRANSIT (OOT) MASK(S) ==============
 
 # The notebook uses raw MJD time values for its OOT mask.
-# target_star_photometry.py uses normalised time starting from 0.
+# original target_star_photometry.py work uses normalised time starting from 0.
 # Both are seperately kept here since they are/may be intentionally different.
 
 
@@ -134,7 +133,7 @@ OOT_END_NORM = 0.2
 
 # Bin sizes for the light curves.
 
-# Notebook used 7, .py used 6. Not overly important to distinguish, perhaps down to what the user prefers possible by visual inspection
+# Notebook used 7, original .py work used 6. Not overly important to distinguish, perhaps down to what the user prefers possible by visual inspection
 
 BIN_SIZE_NOTEBOOK = 7
 BIN_SIZE_SCRIPT = 6
@@ -150,6 +149,6 @@ SIGMA_READ = 5
 
 # =============== STELLAR INDEX =================
 
-# Chosen star in bycatch_photometry.py
+# Chosen star in original bycatch_photometry.py work
 
 STAR_INDEX = 177 #DEAN

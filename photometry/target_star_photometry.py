@@ -6,51 +6,59 @@
 # -There is some very useful information in the Exotic output files (particularly the "temp" folder) that include optimised parameters,
 # such as aperture size, annulus size, comp stars and so on, raw flux plots for comparison etc. "
 
-# import libraries
-
-import astroalign as aa
-from astropy.io import fits
-from pathlib import Path
+# Standard
 import glob
-#DEAN: from astropy.io import fits ...duplicate
-from photutils.aperture import CircularAnnulus, CircularAperture
-#DEAN: import matplotlib as plt ... duplicate and error-laden
-import matplotlib.pyplot as plt
-from photutils.aperture import ApertureStats
-from photutils.aperture import aperture_photometry
-from astropy.visualization import SqrtStretch
-from astropy.visualization.mpl_normalize import ImageNormalize
-from astropy import units as u
-from astropy.coordinates import SkyCoord
-import numpy as np
-from astropy.table import Table
-#DEAN: from photutils.aperture import aperture_photometry ... duplicate
-from astropy.nddata import Cutout2D
-from photutils.centroids import (centroid_1dg, centroid_2dg,
-                                 centroid_com, centroid_quadratic)
-#DEAN: import matplotlib.pyplot as plt ... duplicate
-from photutils.detection import DAOStarFinder
-from astropy.stats import SigmaClip
-from photutils.background import Background2D, MedianBackground
-from astropy.stats import sigma_clipped_stats
 import os
 import time
+from pathlib import Path
 
-#DEAN: pull settings from config.py instead of defining locally
-from config import (RAW_DATA_FOLDER, TARGET_POSITIONS, ALIGNED_FOLDER,
-                    FWHM,
-                    APERTURE_R, ANNULUS_R_IN, ANNULUS_R_OUT,
-                    SIGMA_READ,
-                    OOT_START_NORM, OOT_END_NORM,
-                    BIN_SIZE_SCRIPT,
-                    WORKING_DIR)
+# Scientific
+import numpy as np
+import matplotlib.pyplot as plt
 
-#DEAN: no longer run this at top-level
-#start_time = time.time()
+# Astro
+import astroalign as aa
 
-#DEAN: no longer run this at top-level
-# change working directory to directory containing fits folder
-#os.chdir(WORKING_DIR) #DEAN: was os.chdir("/Users/xxx/Downloads/Research_Project/photmetry_data/Hat_P_32_Dec202017.FITS")
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+from astropy.io import fits
+from astropy.nddata import Cutout2D
+from astropy.stats import SigmaClip, sigma_clipped_stats
+from astropy.table import Table
+from astropy.visualization import SqrtStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
+
+# Astro Photometry
+from photutils.aperture import (
+    ApertureStats,
+    CircularAnnulus,
+    CircularAperture,
+    aperture_photometry,
+)
+from photutils.background import Background2D, MedianBackground
+from photutils.centroids import (
+    centroid_1dg,
+    centroid_2dg,
+    centroid_com,
+    centroid_quadratic,
+)
+from photutils.detection import DAOStarFinder
+
+# Local file(s)
+from config import (
+    ALIGNED_FOLDER,
+    ANNULUS_R_IN,
+    ANNULUS_R_OUT,
+    APERTURE_R,
+    BIN_SIZE_SCRIPT,
+    FWHM,
+    OOT_END_NORM,
+    OOT_START_NORM,
+    RAW_DATA_FOLDER,
+    SIGMA_READ,
+    TARGET_POSITIONS,
+    WORKING_DIR,
+)
 
 def align_images(RAW_DATA_FOLDER):
 
@@ -62,18 +70,19 @@ def align_images(RAW_DATA_FOLDER):
     # It is also case sensitive so you might need to check if your .fits is caps or not
 
     # iterates through image files, loads all images ending in .FITS to memory
-    fits_files = sorted(glob.glob(RAW_DATA_FOLDER + "/*.FITS")) #DEAN: was sorted(glob.glob("data/*.FITS"))
+    fits_files = sorted(glob.glob(RAW_DATA_FOLDER + "/*.FITS"))
 
     # gets the flux values and header data for the chosen fits file, this is your reference image
     reference = fits.getdata(fits_files[0])
 
     # makes a new fodler in your working directory for the aligned images to be saved to
-    os.makedirs(ALIGNED_FOLDER, exist_ok=True) #DEAN: was os.makedirs("aligned-images", exist_ok=True)
+    os.makedirs(ALIGNED_FOLDER, exist_ok=True)
 
     # iterate through the fits file folder
     for f in fits_files:
-        #print(f"Aligning: {f}", flush=True) # debug: check alignment is working for each file
-
+        # uncomment to debug: check alignment is working for each file:
+        #print(f"Aligning: {f}", flush=True)
+        
         # pulls out the flux values and header info for each fits file and stores them in memory
         data, header = fits.getdata(f, header=True)
         # data (flux values) is turned into an array, this is not essential but easier to work with
@@ -84,9 +93,9 @@ def align_images(RAW_DATA_FOLDER):
 
         # writes the each of the aligned files to the new folder we created above.
         base = os.path.basename(f)
-        new_name = os.path.join(ALIGNED_FOLDER, base) #DEAN: was os.path.join("aligned-images", base)
+        new_name = os.path.join(ALIGNED_FOLDER, base)
 
-        #DEAN: unsure if this is a local issue however sometimes Windows can lock this file;
+        #DEAN: unsure if this is a local issue however sometimes Windows can lock this file, so:
         # set conditional to remove if already exists
         if os.path.exists(new_name):
             os.remove(new_name)
@@ -97,27 +106,25 @@ def align_images(RAW_DATA_FOLDER):
 
         # this cell performs the photometry for just the target and comp stars
         # I have commented out the background gradient reduction in the loop, as it seems to add a slight bit of noise if anything. however you can uncomment it and play around with it.
-        #
 
     # now we are iterating through the new aligned fits images we have jsut created, copy the complete filepath into the inverted commas, being sure to include the /*.FITS still.
-    aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS")) #DEAN: was sorted(glob.glob("aligned-images/*.FITS"))
+    aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
 
     return aligned_fits
 
-#DEAN: debug align_images() func
-#aligned_fits = align_images(RAW_DATA_FOLDER)
+
 
 def perform_photometry(aligned_fits, TARGET_POSITIONS):
 
     # choose positions for your target and comp stars, putting the target star first. AAVSO chart finder used in conjunction with AIJ is extremely helpful for finding good comp stars
-    positions = TARGET_POSITIONS #DEAN: was positions = ((424.4, 286.8), (348, 215.5), (465, 182.6))
+    positions = TARGET_POSITIONS
 
     # define your aperture, positions are defined above so just chose a radius value. Exotic provides the optimised aperture radius in their output files, found in the "final parameters" file
     # or you can make a rough guess from observing the target star in AIJ
-    aperture = CircularAperture(positions, r=APERTURE_R) #DEAN: was CircularAperture(positions, r=4.44)
+    aperture = CircularAperture(positions, r=APERTURE_R)
 
     # define annulus aperture, this is required for the backgorund reduction. Exotic provides the  optimised "r_in" parameter but not "r_out", usually something a little less than double r_in is good.
-    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT) #DEAN: was CircularAnnulus(positions, r_in=7.15, r_out=12)
+    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT)
 
     # the variable rows is created to append the desired values later in the loop.
     rows = []
@@ -150,7 +157,7 @@ def perform_photometry(aligned_fits, TARGET_POSITIONS):
         comp_fluxes = fluxes[1:]
 
         # using the aperstats module we find the median background value from the annulus.
-        bkg_median = aperstats.median #DEAN: notebook uses bkg_median; target_star_photometry.py used annulus_median ... kept notebook naming
+        bkg_median = aperstats.median # notebook uses bkg_median; original target_star_photometry.py work used annulus_median ... kept notebook naming
         # Multiply the median value by our aperture area to get the total background count within our aperture. this background method works well because it is very local to the Target star
         bkg_aperture = bkg_median * aperture.area
         # Each background is deinfed accordingly like it was done for the fluxes
@@ -173,10 +180,10 @@ def perform_photometry(aligned_fits, TARGET_POSITIONS):
         # the differential flux is the target star flux divided by the reference flux. This helps enormously with reducing any atmosherpic/seeing effects that are being produced across the image
         differential_T_flux = T_reduced_flux / reference_flux
 
-        #DEAN: error calculations below are from target_star_photometry.py — not in the notebook, added here as an extension
+        #DEAN: error calculations below are from original target_star_photometry.py work — not in the notebook, added here as an extension
         aperture_sum = fluxes - bkg_aperture  # reduced fluxes for all positions
         n_pix = aperture.area
-        sigma_read = SIGMA_READ #DEAN: was sigma_read = 5
+        sigma_read = SIGMA_READ
         std_ann = aperstats.std
         n_ann = annulus_aperture.area
 
@@ -223,8 +230,6 @@ def perform_photometry(aligned_fits, TARGET_POSITIONS):
 
     return lc_table
 
-#DEAN: debug perform_photometry()
-#lc_table = perform_photometry(TARGET_POSITIONS)
 
 def normalise_light_curves(lc_table):
         
@@ -237,7 +242,7 @@ def normalise_light_curves(lc_table):
     lc_table["norm_t"] = t
 
     # define ingress and egress times respectively
-    oot_mask = (lc_table["norm_t"] < OOT_START_NORM) | (lc_table["norm_t"] > OOT_END_NORM)  #DEAN: was (lc_table["norm_t"] < 0.06) | (lc_table["norm_t"] > 0.2)
+    oot_mask = (lc_table["norm_t"] < OOT_START_NORM) | (lc_table["norm_t"] > OOT_END_NORM)
     lc_table["oot_mask"] = oot_mask 
     # uses the mask to normailise the baseline time so that it is now roughly 1
     baseline = np.median(lc_table["diff_T_flux"][oot_mask])
@@ -246,7 +251,7 @@ def normalise_light_curves(lc_table):
     # adds these values to the table
     lc_table["norm_flux"] = norm_flux
 
-    #DEAN: error normalisation from target_star_photometry.py
+    # error normalisation from target_star_photometry.py
     norm_flux_error = lc_table["diff_error"] / baseline
     lc_table["norm_flux_error"] = norm_flux_error
 
@@ -257,16 +262,16 @@ def normalise_light_curves(lc_table):
 
 def plot_target_star_photometry(lc_table):
 
-    #DEAN: initialise the mask from normalise_light_curves()
+    # initialise the mask from normalise_light_curves()
     oot_mask = lc_table["oot_mask"].astype(bool) #boolean precaution to astropy Table
 
-    #DEAN: plot of the normalised flux
+    # plot of the normalised flux
     plt.plot(lc_table["norm_t"], lc_table["norm_flux"], marker='.', color='gray')
     plt.xlabel("MJD")
     plt.ylabel("normailised flux")
     plt.show()
 
-    #DEAN: error bar plot with RMS and SNR annotation from target_star_photometry.py
+    # error bar plot with RMS and SNR annotation from target_star_photometry.py
     fig1, ax = plt.subplots()
 
     ax.errorbar(lc_table["norm_t"],
@@ -281,7 +286,6 @@ def plot_target_star_photometry(lc_table):
     oot_flux = lc_table["norm_flux"][oot_mask]
     rms = np.std(oot_flux)
 
-    #it_mask = (lc_table["norm_t"] > OOT_START_NORM) & (lc_table["norm_t"] < OOT_END_NORM)  #DEAN: was (lc_table["norm_t"] > 0.06) & (lc_table["norm_t"] < 0.2)
     it_mask = ~oot_mask # just the inverse of oot_mask
     transit_depth = 1 - np.median(lc_table["norm_flux"][it_mask])
     scatter = np.std(lc_table["norm_flux"][oot_mask])
@@ -304,7 +308,7 @@ def plot_target_star_photometry(lc_table):
     # bins the data and plots average of binned points, useful to see the overall shape of the curve
 
     # I have chosen a bin size of 14 so that i have 10 binned data points. the exact bin size is not important, but the best bin size would be the one that shows the shape of the trasnit the best
-    bin_size = BIN_SIZE_SCRIPT  #DEAN: was bin_size = 6 in target_star_photometry.py, 7 in the notebook ... using script value here, see config.py
+    bin_size = BIN_SIZE_SCRIPT  #DEAN: was bin_size = 6 in original target_star_photometry.py work, 7 in the notebook ... using script value here, see config.py
 
     lc_time = lc_table["norm_t"]
     flux = lc_table["norm_flux"]
@@ -342,7 +346,7 @@ def plot_target_star_photometry(lc_table):
 def execute_target_star_photometry():
 
     # change working directory to directory containing fits folder
-    os.chdir(WORKING_DIR) #DEAN: was os.chdir("/Users/xxx/Downloads/Research_Project/photmetry_data/Hat_P_32_Dec202017.FITS")
+    os.chdir(WORKING_DIR)
 
     aligned_fits = align_images(RAW_DATA_FOLDER)
     lc_table     = perform_photometry(aligned_fits, TARGET_POSITIONS)

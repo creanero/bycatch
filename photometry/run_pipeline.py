@@ -22,9 +22,12 @@
 
 # The notebook has the steps of these scripts annotated and describes the pipeline in more depth
 
+# Standard
 import time
+
+# Local file(s)
 import target_star_photometry
-import bycatch_photometry #DEAN: need to rename bycatch-photometry to remove the hyphen otherwise this cannot import
+import bycatch_photometry
 
 print("Phase 1: Target star photometry and alignment:")
 target_star_photometry.execute_target_star_photometry()
