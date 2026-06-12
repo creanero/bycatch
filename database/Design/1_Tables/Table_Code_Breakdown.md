@@ -62,6 +62,7 @@ tableName:([]
   * See [Column Data Types doc](./Column_Data_Types.md) for more info on uses of data types
 
 ## Relational Structure (Foreign Keys):
+
   * The 5 tables form a hierarchy:
 
 Sources (source\_id)  
@@ -78,10 +79,10 @@ Sources (source\_id)
 
 - The foreign key relationships (source\_id, session\_id, obs\_id) are not enforced by the schema syntax. They’re relational by convention, enforced in queries.
 
-* The Separator ;  
+* The Separator `;`  
   * Separates expressions within a list of function bodies. Here it separates each column definition. The last column in each table has no trailing semicolon \- this is required q syntax (a trailing ; would add a null entry)
 
-**Summary of what this code does**
+## Summary of what this code does
 
 * Creates 5 empty, typed, in-memory tables that form a relational schema for storing astronomical photometry data \- star/planet observations from telescopes, including the raw flux measurements, the sky positions, the pixel centroids, and the PSF shape parameters. The type choices (long for high-volume IDs, symbol for categorical text, float for scientific, date for temporal queries) are all deliberate performance decisions idiomatic to q/KDB+
 
