@@ -61,7 +61,7 @@ tableName:([]
     ```
   * See [Column Data Types doc](./Column_Data_Types.md) for more info on uses of data types
 
-* **Relational Structure (Foreign Keys):**  
+## Relational Structure (Foreign Keys):
   * The 5 tables form a hierarchy:
 
 Sources (source\_id)  
