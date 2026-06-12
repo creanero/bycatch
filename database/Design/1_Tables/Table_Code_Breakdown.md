@@ -2,19 +2,21 @@
 
 **Example for Observations Table:**
 
-*/ Observations Table*  
-*observations:(\[\]*  
-	*obs\_id:\`long$();*  
-	*session\_id:\`int$();*  
-	*BJD\_TDB:\`float$();*  
-	*orbital\_phase:\`float$();*  
-	*flux:\`float$();*  
-	*Uncertainty:\`float$();*  
-	*model:\`float$()*  
-	*airmass:\`float$();*  
-	*amplitude\`float$();*  
-	*offset:\`float$();*  
-	*);*
+```
+/ Observations Table
+observations:([]
+	obs_id:`long$();
+	session_id:`int$();
+	BJD_TDB:`float$();
+	orbital_phase:`float$();
+	flux:`float$();
+	Uncertainty:`float$();
+	model:`float$()
+	airmass:`float$();
+	amplitude`float$();
+	offset:`float$();
+	);
+```
 
 **Breakdown:**
 
