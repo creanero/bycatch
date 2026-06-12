@@ -21,8 +21,9 @@ observations:([]
 ## Breakdown:
 
 ```q 
-observations:([]
+observations:([]...
 ```
+* Assign name “observations” to table
 ### Table creation syntax:  
 ```q
 tableName:([]
@@ -30,22 +31,35 @@ tableName:([]
       col2:type$(); ... 
       )
 ```
-### Assign name “observations” to table
 
-* (\[\]...)  
+```q
+ ([]...)
+```
   * Creates an unkeyed table (plain table with no primary key)  
-  * If you put column names inside the brackets like (\[col1\] col2:...), those become the keyed columns (like a primary key)
+  * If you put column names inside the brackets like
+    ```q
+    (\[col1\] col2:...)
+    ```
+  * those become the keyed columns (like a primary key)
 
-* Assignment → :  
-  * tableName:(...)  
-    * Assigns the result of the expression on the right to the variable on the left
+### Assignment   
+  ```q
+  tableName:(...)
+  ```
+    * `:` Assigns the result of the expression on the right to the variable on the left
 
-* Type Casting → \`type$()  
-  * \`int → Backtick symbol denoting the type name  
-  * $ → Cast operator: Casts what’s on its right to the type on the left  
-  * () → Empty list  
-  * E.g. \`int$() \= Empty list of type integer  
-  * *(See Column Data Types doc for more info on uses of data types)* 
+### Type Casting 
+```q
+`type$()
+```
+  * Backtick symbol `\`int`  denoting the type name  
+  * Cast operator `$` Casts what’s on its right to the type on the left  
+  * List operator `()` → Empty list  
+  * E.g.  Empty list of type integer
+    ```q
+    `int$()
+    ```
+  * See [Column Data Types doc](./Column_Data_Types.md) for more info on uses of data types
 
 * **Relational Structure (Foreign Keys):**  
   * The 5 tables form a hierarchy:
