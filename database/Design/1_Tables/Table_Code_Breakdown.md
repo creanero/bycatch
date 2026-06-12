@@ -1,8 +1,8 @@
-**Table Code Breakdown**
+# Table Code Breakdown
 
-**Example for Observations Table:**
+## Example for Observations Table:
 
-```
+```q
 / Observations Table
 observations:([]
 	obs_id:`long$();
@@ -18,15 +18,19 @@ observations:([]
 	);
 ```
 
-**Breakdown:**
+## Breakdown:
 
-* observations:(\[\]  
-  * Table creation syntax:  
-    * tableName:(\[\]   
+```q 
+observations:([]
+```
+### Table creation syntax:  
+```q
+tableName:([]
       col1:type$();  
-      col2:type$(); …  
-      )  
-  * Assign name “observations” to table
+      col2:type$(); ... 
+      )
+```
+### Assign name “observations” to table
 
 * (\[\]...)  
   * Creates an unkeyed table (plain table with no primary key)  
