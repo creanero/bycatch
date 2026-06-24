@@ -127,11 +127,11 @@ loadObservations:{[csv_path;session_id]
 		obs_ids;			/ Unique obs_ids generated to fill column
 		n#session_id;			/ Session foreign key replicated n times to fill column
 		t`BJD_TDB;			/ Barycentric julian date vetcor from CSV
-		t`$"Orbital Phase";		/ Orbital phase vector from CSV and also --> $"..." so Orbital & Phase not read seperately [Convert from string to symbol
-		t`Flux;				/ Normalised flux vector from CSV
-		t`Uncertainty;			/ Photometric uncertainty
-		t`Model;			/ Theoretical model flux vector from CSV
-		t`Airmass;			/ Airmass vector from CSV
+		t`orbital_phase;		/ Orbital phase vector from CSV
+		t`flux;				/ Normalised flux vector from CSV
+		t`uncertainty;			/ Photometric uncertainty
+		t`model;			/ Theoretical model flux vector from CSV
+		t`airmass;			/ Airmass vector from CSV
 		t`amplitude;			/ Brightness amplitude vector from CSV
 		t`offset			/ Calibration offset vector from CSV
 	);
