@@ -7,23 +7,15 @@
 import glob
 import os
 import time
-from pathlib import Path
 
 # Scientific
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Astro
-import astroalign as aa
-
-from astropy import units as u
-from astropy.coordinates import SkyCoord
 from astropy.io import fits
-from astropy.nddata import Cutout2D
-from astropy.stats import SigmaClip, sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
-from astropy.visualization import SqrtStretch
-from astropy.visualization.mpl_normalize import ImageNormalize
 
 # Astro Photometry 
 from photutils.aperture import (
@@ -31,13 +23,6 @@ from photutils.aperture import (
     CircularAnnulus,
     CircularAperture,
     aperture_photometry,
-)
-from photutils.background import Background2D, MedianBackground
-from photutils.centroids import (
-    centroid_1dg,
-    centroid_2dg,
-    centroid_com,
-    centroid_quadratic,
 )
 from photutils.detection import DAOStarFinder
 
@@ -51,7 +36,7 @@ from config import (
     STAR_INDEX,
     WORKING_DIR,
 )
-start_time = time.time()
+
 
 def detect_sources(aligned_fits):
 
@@ -74,13 +59,13 @@ def detect_sources(aligned_fits):
     for col in sources.colnames:
         if col not in ('id', 'npix'):
             sources[col].info.format = '%.2f'
-    sources.pprint(max_width=76)
+    #sources.pprint(max_width=76)
 
     # if you want to view the table of sources along with their positions and so on uncomment the line below
     # sources.pprint(max_width=76)
 
     # to perform aperture photometry on the sources positions need to be in column order as opposed to row.
-    positions = np.transpose((sources['xcentroid'], sources['ycentroid']))
+    positions = np.transpose((sources['x_centroid'], sources['y_centroid']))
 
     return positions
 
@@ -89,17 +74,14 @@ def detect_sources(aligned_fits):
 def perform_bycatch_photometry(aligned_fits, positions):
         
     # creates an aperture around all detected sources
-    apertures = CircularAperture(positions, r=APERTURE_R)
-    norm = ImageNormalize(stretch=SqrtStretch())
+    aperture = CircularAperture(positions, r=APERTURE_R)
 
+    #norm = ImageNormalize(stretch=SqrtStretch())
     # plt.imshow(data, cmap='Greys', origin='lower', norm=norm,
     #            interpolation='nearest')
     # apertures.plot(color='blue', lw=1.5, alpha=0.5)
 
-
     # uses the positions of the sources present to perform aperture photometry on all sources (bycatch photometry) the same way we did earlier for target and comp stars.
-
-    aperture = CircularAperture(positions, r=APERTURE_R)
     annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT) 
 
     # the Loop below works exactly the same way as it does when we are concerned with only the target and comp stars, except here we just iterate through all the sources present.
@@ -108,7 +90,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
     for i, f in enumerate(aligned_fits, start=1):
         data, header = fits.getdata(f, header=True)
-        time = header["MJD-OBS"]
+        mjd_obs_time = header["MJD-OBS"]
 
         phot = aperture_photometry(data, aperture)
         fluxes = phot[("aperture_sum")] # single aperture
@@ -119,11 +101,11 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
         reduced_fluxes = fluxes - bkg
 
-        rows.append((i, time, reduced_fluxes))
+        rows.append((i, mjd_obs_time, reduced_fluxes))
 
     bycatch_table = Table(
         rows=rows,
-        names=("id", "time", "fluxes")
+        names=("id", "mjd_obs_time", "fluxes")
     )
     print(bycatch_table)
 
@@ -135,10 +117,9 @@ def plot_bycatch_photometry(bycatch_table, stellar_index):
 
     flux_matrix = np.array(bycatch_table['fluxes'])
 
-    end_time = time.time()
 
     star_flux = flux_matrix[:, stellar_index] # notebook used index 177; original bycatch-photometry.py work used 68
-    plt.plot(bycatch_table["time"], star_flux, '.-') # updated col name to match table above
+    plt.plot(bycatch_table["mjd_obs_time"], star_flux, '.-') # updated col name to match table above
     plt.xlabel("Time")
     plt.ylabel("Flux")
     plt.show()
@@ -152,14 +133,18 @@ def execute_bycatch_photometry():
     # Load in the aligned fits images, if you do not have the images aligned they can be created using the more general "photutils-photometry" script or notebook
     # Be sure to leave the /*.FITS at the end of the file path as this is used as an identifier when iterating through the folder
     # It is also case sensitive so you might need to check if your .fits is caps or not
-
     aligned_fits  = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
+
+    t1 = time.perf_counter()
     positions     = detect_sources(aligned_fits)
+    t2 = time.perf_counter()
     bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
+    t3 = time.perf_counter()
     plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) # notebook used (STAR_INDEX =) index 177; original bycatch-photometry.py work used 68 ... use notebook
 
+    print("detect_sources() runtime:", t2 - t1, "seconds")
+    print("perform_bycatch_photometry() runtime:", t3 - t2, "seconds")
+    print("TOTAL RUNTIME:", t3 - t1, "seconds") #excludes plotting (not relevant)
 
 if __name__ == "__main__":
-    start_time = time.time()
     execute_bycatch_photometry()
-    print("Runtime:", time.time() - start_time, "seconds")
