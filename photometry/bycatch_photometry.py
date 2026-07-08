@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 # Astro
 from astropy.io import fits
-from astropy.stats import sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats, SigmaClip
 from astropy.table import Table
 
 # Astro Photometry 
@@ -98,7 +98,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
 
         phot = aperture_photometry(data, aperture)
         fluxes = phot[("aperture_sum")] # single aperture
-        aperstats = ApertureStats(data, annulus_aperture)
+        aperstats = ApertureStats(data, annulus_aperture, sigma_clip=None) # sigma_clip=None appears to reduce marginally reduce photoutil runtime, but need to determine if default outlier removal provided is necessary
         bkg_median = aperstats.median
         bkg = bkg_median * aperture.area
         reduced_fluxes = fluxes - bkg
@@ -120,7 +120,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
     )
     print(bycatch_table)
 
-    return bycatch_table
+    return bycatch_table, (t_read, t_photometry, t_appending)
 
 
 
@@ -149,7 +149,7 @@ def execute_bycatch_photometry():
     t1 = time.perf_counter()
     positions     = detect_sources(aligned_fits)
     t2 = time.perf_counter()
-    bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
+    bycatch_table, timeouts = perform_bycatch_photometry(aligned_fits, positions)
     t3 = time.perf_counter()
     plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) # notebook used (STAR_INDEX =) index 177; original bycatch-photometry.py work used 68 ... use notebook
 
@@ -159,13 +159,29 @@ def execute_bycatch_photometry():
 
 if __name__ == "__main__":
     #execute_bycatch_photometry()
+    TEST_ITERS = 5
+    t_read_agg = []
+    t_photometry_agg = []
+    t_appending_agg = []
 
-    os.chdir(WORKING_DIR)
-    aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
+    for i in range(TEST_ITERS):
 
-    positions = detect_sources(aligned_fits)
+        os.chdir(WORKING_DIR)
+        aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
 
-    bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
+        positions = detect_sources(aligned_fits)
 
-    print(bycatch_table)
-    print(type(bycatch_table))
+        bycatch_table, timeouts = perform_bycatch_photometry(aligned_fits, positions)
+
+        t_read_agg.append(timeouts[0])
+        t_photometry_agg.append(timeouts[1])
+        t_appending_agg.append(timeouts[2])
+
+        #print(timeouts)
+        #print(bycatch_table)
+        #print(type(bycatch_table))
+
+    print(f"\nFor {TEST_ITERS} iterations:")
+
+    print(f"AGGREGATE MEAN TIMES ... I/O read: {np.mean(t_read_agg):.5f}s ... photutils: {np.mean(t_photometry_agg):.5f}s ... packing: {np.mean(t_appending_agg):.5f}s")
+    print(f"AGGREGATE SIGMA TIMES ... I/O read: {np.std(t_read_agg):.5f}s ... photutils: {np.std(t_photometry_agg):.5f}s ... packing: {np.std(t_appending_agg):.5f}s")
