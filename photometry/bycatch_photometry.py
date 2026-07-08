@@ -70,7 +70,6 @@ def detect_sources(aligned_fits):
     return positions
 
 
-
 def perform_bycatch_photometry(aligned_fits, positions):
         
     # creates an aperture around all detected sources
@@ -87,21 +86,33 @@ def perform_bycatch_photometry(aligned_fits, positions):
     # the Loop below works exactly the same way as it does when we are concerned with only the target and comp stars, except here we just iterate through all the sources present.
     # for information on how this loop works, see the commented photutils photometry python file / notebook.
     rows = []
+    t_read = np.array([])
+    t_photometry = np.array([])
+    t_appending = np.array([])
 
     for i, f in enumerate(aligned_fits, start=1):
+        t1_photometry = time.perf_counter()
         data, header = fits.getdata(f, header=True)
         mjd_obs_time = header["MJD-OBS"]
+        t2_photometry = time.perf_counter()
 
         phot = aperture_photometry(data, aperture)
         fluxes = phot[("aperture_sum")] # single aperture
         aperstats = ApertureStats(data, annulus_aperture)
-
         bkg_median = aperstats.median
         bkg = bkg_median * aperture.area
-
         reduced_fluxes = fluxes - bkg
+        t3_photometry = time.perf_counter()
 
         rows.append((i, mjd_obs_time, reduced_fluxes))
+        t4_photometry = time.perf_counter()
+
+        t_read = np.append(t_read, t2_photometry - t1_photometry)
+        t_photometry = np.append(t_photometry, t3_photometry - t2_photometry)
+        t_appending = np.append(t_appending, t4_photometry - t3_photometry)
+
+    print(f"MEAN TIMES ... I/O read: {np.mean(t_read):.5f}s ... photutils: {np.mean(t_photometry):.5f}s ... packing: {np.mean(t_appending):.5f}s")
+    print(f"SIGMA TIMES ... I/O read: {np.std(t_read):.5f}s ... photutils: {np.std(t_photometry):.5f}s ... packing: {np.std(t_appending):.5f}s")
 
     bycatch_table = Table(
         rows=rows,
@@ -147,4 +158,14 @@ def execute_bycatch_photometry():
     print("TOTAL RUNTIME:", t3 - t1, "seconds") #excludes plotting (not relevant)
 
 if __name__ == "__main__":
-    execute_bycatch_photometry()
+    #execute_bycatch_photometry()
+
+    os.chdir(WORKING_DIR)
+    aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
+
+    positions = detect_sources(aligned_fits)
+
+    bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
+
+    print(bycatch_table)
+    print(type(bycatch_table))
