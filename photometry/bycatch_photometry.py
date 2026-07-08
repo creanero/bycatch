@@ -96,9 +96,9 @@ def perform_bycatch_photometry(aligned_fits, positions):
         mjd_obs_time = header["MJD-OBS"]
         t2_photometry = time.perf_counter()
 
-        phot = aperture_photometry(data, aperture)
+        phot = aperture_photometry(data, aperture, method="center") # method="center" reduces number of calculations and should not affect results
         fluxes = phot[("aperture_sum")] # single aperture
-        aperstats = ApertureStats(data, annulus_aperture, sigma_clip=None) # sigma_clip=None appears to reduce marginally reduce photoutil runtime, but need to determine if default outlier removal provided is necessary
+        aperstats = ApertureStats(data, annulus_aperture, sigma_clip=None) # sigma_clip=None appears to reduce marginally reduce photoutil runtime. outlier analysis not wholly necessary when taking median
         bkg_median = aperstats.median
         bkg = bkg_median * aperture.area
         reduced_fluxes = fluxes - bkg
@@ -159,7 +159,7 @@ def execute_bycatch_photometry():
 
 if __name__ == "__main__":
     #execute_bycatch_photometry()
-    TEST_ITERS = 5
+    TEST_ITERS = 3
     t_read_agg = []
     t_photometry_agg = []
     t_appending_agg = []
