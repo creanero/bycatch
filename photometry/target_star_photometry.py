@@ -10,6 +10,7 @@
 import glob
 import os
 import time
+import tracemalloc
 from pathlib import Path
 
 # Scientific
@@ -78,18 +79,30 @@ def align_images(RAW_DATA_FOLDER):
     # makes a new fodler in your working directory for the aligned images to be saved to
     os.makedirs(ALIGNED_FOLDER, exist_ok=True)
 
+    # per-stage file I/O benchmarking: read (disk->mem), align (CPU-bound, kept for contrast), write (mem->disk)
+    t_read = np.array([])
+    t_align = np.array([])
+    t_write = np.array([])
+    read_bytes = np.array([])
+    written_bytes = np.array([])
+
+    tracemalloc.start()
+
     # iterate through the fits file folder
     for f in fits_files:
         # uncomment to debug: check alignment is working for each file:
         #print(f"Aligning: {f}", flush=True)
-        
+
+        t1_io = time.perf_counter()
         # pulls out the flux values and header info for each fits file and stores them in memory
         data, header = fits.getdata(f, header=True)
+        t2_io = time.perf_counter()
         # data (flux values) is turned into an array, this is not essential but easier to work with
         data = np.asarray(data, dtype=np.float64)
 
         # this is an astropy module that aligns each frame in the loop based off the reference frame that we chose above
         aligned_data, footprint = aa.register(data, reference)
+        t3_io = time.perf_counter()
 
         # writes the each of the aligned files to the new folder we created above.
         base = os.path.basename(f)
@@ -99,18 +112,33 @@ def align_images(RAW_DATA_FOLDER):
         # set conditional to remove if already exists
         if os.path.exists(new_name):
             os.remove(new_name)
-        
+
         fits.writeto(new_name, aligned_data, header, overwrite=True)
+        t4_io = time.perf_counter()
+
+        t_read = np.append(t_read, t2_io - t1_io)
+        t_align = np.append(t_align, t3_io - t2_io)
+        t_write = np.append(t_write, t4_io - t3_io)
+        read_bytes = np.append(read_bytes, os.path.getsize(f))
+        written_bytes = np.append(written_bytes, os.path.getsize(new_name))
 
         # after you have run this cell if you check your working directory you should see an additional folder with the new name you have chosen, containing the aligned images
 
         # this cell performs the photometry for just the target and comp stars
         # I have commented out the background gradient reduction in the loop, as it seems to add a slight bit of noise if anything. however you can uncomment it and play around with it.
 
+    _, max_memory = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    print(f"MEAN TIMES ... read: {np.mean(t_read):.5f}s ... align: {np.mean(t_align):.5f}s ... write: {np.mean(t_write):.5f}s")
+    print(f"SIGMA TIMES ... read: {np.std(t_read):.5f}s ... align: {np.std(t_align):.5f}s ... write: {np.std(t_write):.5f}s")
+    print(f"DISK ... total read: {np.sum(read_bytes)/1e6:.2f} MB ... total written: {np.sum(written_bytes)/1e6:.2f} MB")
+    print(f"MEMORY ... max (tracemalloc, Python objects only): {max_memory/1e6:.2f} MB")
+
     # now we are iterating through the new aligned fits images we have jsut created, copy the complete filepath into the inverted commas, being sure to include the /*.FITS still.
     aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
 
-    return aligned_fits
+    return aligned_fits, (t_read, t_align, t_write, read_bytes, written_bytes, max_memory)
 
 
 
@@ -348,7 +376,7 @@ def execute_target_star_photometry():
     # change working directory to directory containing fits folder
     os.chdir(WORKING_DIR)
 
-    aligned_fits = align_images(RAW_DATA_FOLDER)
+    aligned_fits, io_timeouts = align_images(RAW_DATA_FOLDER)
     lc_table     = perform_photometry(aligned_fits, TARGET_POSITIONS)
     lc_table     = normalise_light_curves(lc_table)
     plot_target_star_photometry(lc_table)
