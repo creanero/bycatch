@@ -7,6 +7,7 @@
 import glob
 import os
 import time
+import tracemalloc
 
 # Scientific
 import numpy as np
@@ -89,12 +90,16 @@ def perform_bycatch_photometry(aligned_fits, positions):
     t_read = np.array([])
     t_photometry = np.array([])
     t_appending = np.array([])
+    read_bytes = np.array([])
+
+    tracemalloc.start()
 
     for i, f in enumerate(aligned_fits, start=1):
         t1_photometry = time.perf_counter()
         data, header = fits.getdata(f, header=True)
         mjd_obs_time = header["MJD-OBS"]
         t2_photometry = time.perf_counter()
+        read_bytes = np.append(read_bytes, os.path.getsize(f))
 
         phot = aperture_photometry(data, aperture, method="center") # method="center" reduces number of calculations and should not affect results
         fluxes = phot[("aperture_sum")] # single aperture
@@ -111,8 +116,13 @@ def perform_bycatch_photometry(aligned_fits, positions):
         t_photometry = np.append(t_photometry, t3_photometry - t2_photometry)
         t_appending = np.append(t_appending, t4_photometry - t3_photometry)
 
+    _, max_memory = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
     print(f"MEAN TIMES ... I/O read: {np.mean(t_read):.5f}s ... photutils: {np.mean(t_photometry):.5f}s ... packing: {np.mean(t_appending):.5f}s")
     print(f"SIGMA TIMES ... I/O read: {np.std(t_read):.5f}s ... photutils: {np.std(t_photometry):.5f}s ... packing: {np.std(t_appending):.5f}s")
+    print(f"DISK ... total read: {np.sum(read_bytes)/1e6:.2f} MB")
+    print(f"MEMORY ... peak (tracemalloc, Python objects only): {max_memory/1e6:.2f} MB")
 
     bycatch_table = Table(
         rows=rows,
@@ -120,7 +130,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
     )
     print(bycatch_table)
 
-    return bycatch_table, (t_read, t_photometry, t_appending)
+    return bycatch_table, (t_read, t_photometry, t_appending, read_bytes, max_memory)
 
 
 
@@ -163,7 +173,8 @@ if __name__ == "__main__":
     t_read_agg = []
     t_photometry_agg = []
     t_appending_agg = []
-
+    read_bytes_agg = []
+    max_memory_agg = []
     for i in range(TEST_ITERS):
 
         os.chdir(WORKING_DIR)
@@ -176,7 +187,8 @@ if __name__ == "__main__":
         t_read_agg.append(timeouts[0])
         t_photometry_agg.append(timeouts[1])
         t_appending_agg.append(timeouts[2])
-
+        read_bytes_agg.append(timeouts[3])
+        max_memory_agg.append(timeouts[4])  
         #print(timeouts)
         #print(bycatch_table)
         #print(type(bycatch_table))
@@ -185,3 +197,5 @@ if __name__ == "__main__":
 
     print(f"AGGREGATE MEAN TIMES ... I/O read: {np.mean(t_read_agg):.5f}s ... photutils: {np.mean(t_photometry_agg):.5f}s ... packing: {np.mean(t_appending_agg):.5f}s")
     print(f"AGGREGATE SIGMA TIMES ... I/O read: {np.std(t_read_agg):.5f}s ... photutils: {np.std(t_photometry_agg):.5f}s ... packing: {np.std(t_appending_agg):.5f}s")
+    print(f"AGGREGATE READ BYTES ... total: {np.sum(read_bytes_agg)/1e6:.2f} MB")
+    print(f"AGGREGATE MAX MEMORY ... peak: {np.max(max_memory_agg)/1e6:.2f} MB")
