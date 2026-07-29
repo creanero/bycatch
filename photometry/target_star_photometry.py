@@ -47,11 +47,11 @@ from photutils.detection import DAOStarFinder
 # Local file(s)
 from config import (
     ALIGNED_FOLDER,
-    ANNULUS_R_IN,
-    ANNULUS_R_OUT,
-    APERTURE_R,
+    ANNULUS_GAP_COEFF,
+    ANNULUS_WIDTH_COEFF,
+    APERTURE_COEFF,
     BIN_SIZE_SCRIPT,
-    FWHM,
+    FWHM_INIT,
     OOT_END_NORM,
     OOT_START_NORM,
     RAW_DATA_FOLDER,
@@ -59,6 +59,7 @@ from config import (
     TARGET_POSITIONS,
     WORKING_DIR,
 )
+from fwhm_calibration import derive_apertures, determine_fwhm
 
 def align_images(RAW_DATA_FOLDER):
 
@@ -74,6 +75,10 @@ def align_images(RAW_DATA_FOLDER):
 
     # gets the flux values and header data for the chosen fits file, this is your reference image
     reference = fits.getdata(fits_files[0])
+
+    # use data-driven FWHM measured from reference frame instead of hardcoded EXOTIC param.
+    # will be used to derive aperture and annuli too
+    fwhm = determine_fwhm(reference, fwhm_init=FWHM_INIT)
 
     # makes a new fodler in your working directory for the aligned images to be saved to
     os.makedirs(ALIGNED_FOLDER, exist_ok=True)
@@ -110,21 +115,20 @@ def align_images(RAW_DATA_FOLDER):
     # now we are iterating through the new aligned fits images we have jsut created, copy the complete filepath into the inverted commas, being sure to include the /*.FITS still.
     aligned_fits = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
 
-    return aligned_fits
+    return aligned_fits, fwhm
 
 
 
-def perform_photometry(aligned_fits, TARGET_POSITIONS):
+def perform_photometry(aligned_fits, TARGET_POSITIONS, aperture_r, annulus_r_in, annulus_r_out):
 
     # choose positions for your target and comp stars, putting the target star first. AAVSO chart finder used in conjunction with AIJ is extremely helpful for finding good comp stars
     positions = TARGET_POSITIONS
 
-    # define your aperture, positions are defined above so just chose a radius value. Exotic provides the optimised aperture radius in their output files, found in the "final parameters" file
-    # or you can make a rough guess from observing the target star in AIJ
-    aperture = CircularAperture(positions, r=APERTURE_R)
+    # aperture/annulus radii are now derived from the measured FWHM (see execute_target_star_photometry)
+    aperture = CircularAperture(positions, r=aperture_r)
 
-    # define annulus aperture, this is required for the backgorund reduction. Exotic provides the  optimised "r_in" parameter but not "r_out", usually something a little less than double r_in is good.
-    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT)
+    # define annulus aperture, this is required for the background reduction
+    annulus_aperture = CircularAnnulus(positions, r_in=annulus_r_in, r_out=annulus_r_out)
 
     # the variable rows is created to append the desired values later in the loop.
     rows = []
@@ -348,9 +352,13 @@ def execute_target_star_photometry():
     # change working directory to directory containing fits folder
     os.chdir(WORKING_DIR)
 
-    aligned_fits = align_images(RAW_DATA_FOLDER)
-    lc_table     = perform_photometry(aligned_fits, TARGET_POSITIONS)
-    lc_table     = normalise_light_curves(lc_table)
+    aligned_fits, fwhm = align_images(RAW_DATA_FOLDER)
+    apertures = derive_apertures(fwhm, APERTURE_COEFF, ANNULUS_GAP_COEFF, ANNULUS_WIDTH_COEFF)
+    print(f"Measured FWHM: {fwhm:.2f}px -------> aperture_r={apertures['aperture_r']:.2f}, ")
+    print(f"annulus=({apertures['annulus_r_in']:.2f}, {apertures['annulus_r_out']:.2f})")
+
+    lc_table = perform_photometry(aligned_fits, TARGET_POSITIONS, **apertures)
+    lc_table = normalise_light_curves(lc_table)
     plot_target_star_photometry(lc_table)
 
 

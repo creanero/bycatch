@@ -61,42 +61,29 @@ TARGET_POSITIONS = (
 
 
 
+
 # ============== APERTURE PARAMS ==============
 
-# Aperture radius. 
+# FWHM, aperture radius, and annulus radii are derived per-run based on the reference frame
+# using fwhm_calibration.py instead of being hardcoded via AIJ/EXOTIC.
 
-#EXOTIC gives optimised aperture radius in the output file.
+# Bootstrap initial guess
+FWHM_INIT = 3.0
 
-APERTURE_R = 4.44
+# Aperture radius = APERTURE_COEFF * aggregated FWHM
+# This is the dominant driver of SNR (=1.5 vs =2.6 on HATP32b doubled the SNR) 
+# TODO: a proper automated way to derive this from data would need to avoid 
+# re-reading/re-processing the full aligned stack per candidate value
+APERTURE_COEFF = 2.6
 
-
-
-# Annulus inner radius.
-
-#EXOTIC provides optimised again.
-
-ANNULUS_R_IN = 7.15
-
-
-
-# Annulus outer radius. 
-
-#"r_out" is not provided by EXOTIC. "usually ~< 2x r_in is good".
-# notebook target cell used 12, notebook bycatch cell used 12.15,
-# bycatch-photometry.py used 12.15 — using 12.15 to match bycatch convention
-
-ANNULUS_R_OUT = 12.15
-
-
-
-
-# ============== SOURCE DETECTION ==============
-
-# FWHM for DAOStarFinder source detection.
-
-# "FWHM remains fairly const for all sources" ... "good approx using AIJ".
-
-FWHM = 2.6
+# Annulus radii are defined relative to the winning aperture radius, not as
+# independent ratios of FWHM: much less sensitive than APERTURE_COEFF - they just
+# need to (a) clear the target's PSF wings so the background estimate isn't
+# biased by stellar flux, and (b) span enough pixels for a stable median.
+#   annulus_r_in  = aperture_r + ANNULUS_GAP_COEFF * measured_FWHM
+#   annulus_r_out = annulus_r_in + ANNULUS_WIDTH_COEFF * measured_FWHM
+ANNULUS_GAP_COEFF = 1.55
+ANNULUS_WIDTH_COEFF = 2.9
 
 
 

@@ -29,13 +29,14 @@ from photutils.detection import DAOStarFinder
 # Local file(s)
 from config import (
     ALIGNED_FOLDER,
-    ANNULUS_R_IN,
-    ANNULUS_R_OUT,
-    APERTURE_R,
-    FWHM,
+    ANNULUS_GAP_COEFF,
+    ANNULUS_WIDTH_COEFF,
+    APERTURE_COEFF,
+    FWHM_INIT,
     STAR_INDEX,
     WORKING_DIR,
 )
+from fwhm_calibration import derive_apertures, determine_fwhm
 
 
 def detect_sources(aligned_fits):
@@ -50,9 +51,12 @@ def detect_sources(aligned_fits):
     # define the mean, median, and std as the values obtained from "sigma clipped stats", which is a photutils module
     mean, median, std = sigma_clipped_stats(source_image, sigma=3)
 
+    # measure FWHM directly from this reference frame instead of using a fixed
+    # guess/EXOTIC-derived constant (see fwhm_calibration.py)
+    fwhm = determine_fwhm(source_image, fwhm_init=FWHM_INIT)
+
     # daofind is the module from photutils that is used to detect sources present in the images
-    # define the fwhm and threshold you would like to use.
-    daofind = DAOStarFinder(fwhm=FWHM, threshold=5.*std)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=5.*std)
     # subtract the mediaan from the "source_image" data. the vast majority of the data points in the image is taken up by background, so it is apropriate in this case to just use the median value here to background reduce.
     sources = daofind(source_image - median)
     # the loop below was copied from the phoutils user guide, it neatly formats the output table
@@ -67,14 +71,15 @@ def detect_sources(aligned_fits):
     # to perform aperture photometry on the sources positions need to be in column order as opposed to row.
     positions = np.transpose((sources['x_centroid'], sources['y_centroid']))
 
-    return positions
+    return positions, fwhm
 
 
 
-def perform_bycatch_photometry(aligned_fits, positions):
-        
+def perform_bycatch_photometry(aligned_fits, positions, aperture_r, annulus_r_in, annulus_r_out):
+
     # creates an aperture around all detected sources
-    aperture = CircularAperture(positions, r=APERTURE_R)
+    # aperture/annulus radii are gotten from the measured FWHM (see execute_bycatch_photometry)
+    aperture = CircularAperture(positions, r=aperture_r)
 
     #norm = ImageNormalize(stretch=SqrtStretch())
     # plt.imshow(data, cmap='Greys', origin='lower', norm=norm,
@@ -82,7 +87,7 @@ def perform_bycatch_photometry(aligned_fits, positions):
     # apertures.plot(color='blue', lw=1.5, alpha=0.5)
 
     # uses the positions of the sources present to perform aperture photometry on all sources (bycatch photometry) the same way we did earlier for target and comp stars.
-    annulus_aperture = CircularAnnulus(positions, r_in=ANNULUS_R_IN, r_out=ANNULUS_R_OUT) 
+    annulus_aperture = CircularAnnulus(positions, r_in=annulus_r_in, r_out=annulus_r_out)
 
     # the Loop below works exactly the same way as it does when we are concerned with only the target and comp stars, except here we just iterate through all the sources present.
     # for information on how this loop works, see the commented photutils photometry python file / notebook.
@@ -136,9 +141,14 @@ def execute_bycatch_photometry():
     aligned_fits  = sorted(glob.glob(ALIGNED_FOLDER + "/*.FITS"))
 
     t1 = time.perf_counter()
-    positions     = detect_sources(aligned_fits)
+    positions, fwhm = detect_sources(aligned_fits)
+    apertures = derive_apertures(fwhm, APERTURE_COEFF, ANNULUS_GAP_COEFF, ANNULUS_WIDTH_COEFF)
+
+    print(f"Measured FWHM: {fwhm:.2f}px -----> aperture_r={apertures['aperture_r']:.2f}, ")
+    print(f"annulus=({apertures['annulus_r_in']:.2f}, {apertures['annulus_r_out']:.2f})")
+
     t2 = time.perf_counter()
-    bycatch_table = perform_bycatch_photometry(aligned_fits, positions)
+    bycatch_table = perform_bycatch_photometry(aligned_fits, positions, **apertures)
     t3 = time.perf_counter()
     plot_bycatch_photometry(bycatch_table, stellar_index=STAR_INDEX) # notebook used (STAR_INDEX =) index 177; original bycatch-photometry.py work used 68 ... use notebook
 
