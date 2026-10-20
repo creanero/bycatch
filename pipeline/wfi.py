@@ -22,6 +22,7 @@ import argparse
 import json
 import logging
 import re
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -253,23 +254,56 @@ def planet_parameters(name, bjd_mid):
 
     row = pyvo.dal.TAPService("https://exoplanetarchive.ipac.caltech.edu/TAP").search(
         "SELECT pl_name, ra, dec, pl_orbper, pl_orbpererr1, pl_tranmid, pl_tranmiderr1, pl_ratror, pl_ratdor, "
-        f"pl_orbincl, pl_orbeccen, pl_orblper, sy_gaiamag FROM pscomppars WHERE pl_name='{name}'").to_table()[0]
+        "pl_orbsmax, st_rad, pl_orbincl, pl_orbeccen, pl_orblper, sy_gaiamag "
+        f"FROM pscomppars WHERE pl_name='{name}'").to_table()[0]
 
     def val(key, default=0.0):
         v = row[key]
         return default if np.ma.is_masked(v) or not np.isfinite(v) else float(v)
 
     per, t0 = val("pl_orbper"), val("pl_tranmid")
+    ars = val("pl_ratdor", np.nan)
+    if not np.isfinite(ars):  # not always tabulated: a / R_star from the semi-major axis and stellar radius
+        ars = val("pl_orbsmax") * 215.032 / val("st_rad", 1.0)
     epoch = int(np.round((bjd_mid - t0) / per))
     sigma = np.hypot(val("pl_tranmiderr1"), abs(epoch) * val("pl_orbpererr1"))
-    return {"name": name, "ra": val("ra"), "dec": val("dec"), "per": per, "ars": val("pl_ratdor"),
+    return {"name": name, "ra": val("ra"), "dec": val("dec"), "per": per, "ars": ars,
             "inc": val("pl_orbincl", 90.0), "ecc": val("pl_orbeccen"), "omega": val("pl_orblper"),
             "rprs": val("pl_ratror", 0.1), "t0_published": t0, "epoch": epoch, "tmid_predicted": t0 + epoch * per,
             "tmid_predicted_sigma_min": float(sigma * 1440), "source": "NASA Exoplanet Archive pscomppars"}
 
 
+def _for_exotic(image):
+    """A calibrated frame in the form EXOTIC's background estimate needs: whole ADU.
+
+    ``exotic.extract.photometry.skybg_phot`` takes the statistical mode of the
+    pixel values around each star. On flat-fielded float data almost every
+    value is unique, so the mode is an arbitrary pixel and the background jumps
+    by tens of ADU from frame to frame (20-30% flux errors at G~17 on WFI).
+    Rounding to integers restores a meaningful mode, at a cost of 0.29 ADU rms
+    of quantisation noise against ~7 ADU of sky noise.
+    """
+    return np.round(np.nan_to_num(image, nan=0.0))
+
+
+def _extract_chunk(job):
+    """``extract_sequence`` for a subset of sources, in a worker process."""
+    detector, bias, flat = _load_products(job["seq_dir"], job["chip"])
+
+    def frames():
+        for i, path in enumerate(job["files"]):
+            image, _, header = calibrated_chip(path, detector["ext"], bias, flat)
+            if i == 0:
+                header.update(job["wcs_header"])
+            yield _for_exotic(image), header
+
+    return extract_sequence(frames(), sky_positions=job["sky_positions"], ra=job["ra"], dec=job["dec"],
+                            observatory=job["observatory"], apertures=job["apertures"], gain=job["gain"],
+                            read_noise=job["read_noise"])
+
+
 def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, max_sources=800,
-            aperture_coeff=None):
+            aperture_coeff=None, workers=16):
     seq_dir = Path(seq_dir)
     detector, bias, flat = _load_products(seq_dir, chip)
     ext = detector["ext"]
@@ -290,21 +324,26 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
     gaia = gaia[picked]
     log.info("chip %d: photometering %d sources (target G=%.2f)", chip, len(gaia), gaia["phot_g_mean_mag"][0])
 
-    def frames():
-        for i, path in enumerate(files):
-            image, _, header = calibrated_chip(path, ext, bias, flat)
-            if i == 0:
-                header.update(wcs.to_header(relax=True))
-            yield np.nan_to_num(image, nan=0.0), header
-
+    # Radii are fixed once here, on the whole source list, so every worker uses the same ones.
     apertures = FwhmScaled() if aperture_coeff is None else FwhmScaled(aperture_coeff=aperture_coeff)
-    table = extract_sequence(frames(), sky_positions=list(zip(np.asarray(gaia["ra"], float),
-                                                              np.asarray(gaia["dec"], float))),
-                             ra=target.ra.deg, dec=target.dec.deg, observatory=obs, apertures=apertures,
-                             gain=detector["gain_e_per_adu"], read_noise=detector["read_noise_e"])
-    grid = table.reshape(len(files), len(gaia))
+    ref_x, ref_y = wcs.world_to_pixel(SkyCoord(np.asarray(gaia["ra"]) * u.deg, np.asarray(gaia["dec"]) * u.deg))
+    radii = apertures.resolve(_for_exotic(reference), list(zip(ref_x, ref_y)))
+    log.info("apertures: r=%.2f, annulus %.2f-%.2f px", radii.aperture_r, radii.annulus_r_in, radii.annulus_r_out)
+
+    # Centroid fitting dominates (~70 ms per source per frame), so split the
+    # sources across processes. Each one re-registers the frames itself.
+    sky_positions = list(zip(np.asarray(gaia["ra"], float), np.asarray(gaia["dec"], float)))
+    chunks = [sky_positions[i::workers] for i in range(workers)]
+    order = np.concatenate([np.arange(len(sky_positions))[i::workers] for i in range(workers)])
+    job = dict(seq_dir=str(seq_dir), chip=chip, files=[str(f) for f in files], wcs_header=wcs.to_header(relax=True),
+               ra=target.ra.deg, dec=target.dec.deg, observatory=obs, apertures=radii,
+               gain=detector["gain_e_per_adu"], read_noise=detector["read_noise_e"])
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        parts = list(pool.map(_extract_chunk, [dict(job, sky_positions=c) for c in chunks if c]))
+    grid = np.concatenate([p.reshape(len(files), -1) for p in parts], axis=1)[:, np.argsort(order)]
     flux = grid["flux"]
-    bjd, airmass, aligned = grid["bjd_tdb"][:, 0], grid["airmass"][:, 0], grid["aligned"][:, 0]
+    bjd, airmass = grid["bjd_tdb"][:, 0], grid["airmass"][:, 0]
+    aligned = grid["aligned"].all(axis=1)
 
     good = aligned & np.isfinite(flux[:, 0]) & (flux[:, 0] > 0)
     comps, comp_scatter = pick_comparisons(flux[good][:, 1:], flux[good][:, 0], n_max=15, ratio_range=(0.5, 5.0))
@@ -330,7 +369,7 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
                 "prog_id": manifest["target"].get("prog_id"), "night": manifest["target"].get("night"),
                 "dp_ids": [p.stem for p in files],
                 "site": {"latitude": obs.latitude, "longitude": obs.longitude, "elevation": obs.elevation},
-                "apertures": {k: float(table[k][0]) for k in ("aperture_r", "annulus_r_in", "annulus_r_out")},
+                "apertures": {k: float(grid[k][0, 0]) for k in ("aperture_r", "annulus_r_in", "annulus_r_out")},
                 "gain": detector["gain_e_per_adu"], "read_noise": detector["read_noise_e"],
                 "uncertainties": "measured gain/read noise (photon transfer)", "detector": detector,
                 "astrometry": json.loads((seq_dir / "products" / "wcs.json").read_text())[str(chip)],
@@ -381,6 +420,7 @@ def main():
             p.add_argument("--g-max", type=float, default=18.5)
             p.add_argument("--max-sources", type=int, default=800)
             p.add_argument("--aperture-coeff", type=float)
+            p.add_argument("--workers", type=int, default=16, help="processes to split the sources across")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if args.command == "calibrate":
@@ -398,7 +438,7 @@ def main():
             chip = found[0]
             log.info("%s is on chip %d at (%.0f, %.0f)", args.planet, *found)
         extract(args.seq_dir, chip, args.planet, args.out, plot_path=args.plot, g_max=args.g_max,
-                max_sources=args.max_sources, aperture_coeff=args.aperture_coeff)
+                max_sources=args.max_sources, aperture_coeff=args.aperture_coeff, workers=args.workers)
 
 
 if __name__ == "__main__":
