@@ -272,7 +272,33 @@ calibrate|solve|extract`): recovered at 1.2 × FWHM with O−C +4.7 ± 4.0 min,
 Rp/Rs 0.166 ± 0.010 (catalogue 0.164), 2.3% rms. The report is
 `reports/progress_2026-10-20.tex`.
 
-EXOTIC pitfalls found (worked around here; fixes belong in exotic-private):
+POTS-1 b second night (54173, `targets/pots1_wfi_54173.json`): O−C +1.3 ±
+2.2 min, Rp/Rs 0.165 ± 0.007, 1.3% rms. With 54230 (18 orbits apart):
+P = 3.16076 ± 0.00018 d vs catalogue 3.16063 d (0.7σ).
+
+WASP-4 b, EFOSC2 (`pipeline/efosc.py`, `targets/wasp4_efosc_55855.json`):
+O−C +0.19 ± 0.29 min against a ±0.02 min prediction; Rp/Rs 0.1518 ±
+0.0007 (catalogue 0.1520); rms 0.12% at 1.9 × FWHM. EFOSC2 specifics:
+
+- Windowed readout (700 × 900 at 0.12"/px), with full-frame calibrations.
+- Header WCS is in full-frame pixels.
+- Defocused PSF (~30 px), so FWHM comes from the radial profile.
+- Only 3–4 stars, so astroalign fails. Registration tracks the target with
+  whole-pixel shifts.
+- Sky flats are `SKY,FLAT`, not WFI's `FLAT,SKY`.
+- Acquisition frames mixed in, so the target file uses `"exposure"`.
+
+Wider ESO search (7 instruments, cached under `~/bycatch-data/search/` on
+cheetah): 92 sequence/transit matches for 41 planets. Mostly target-centred;
+OGLE-TR fields (FORS1/2, SOFI) are the crowded, bycatch-like ones.
+
+Archive outages seen: the NASA Exoplanet Archive returned HTTP 526 for over
+an hour, and Gaia gave intermittent 500s. Planet rows are cached in
+`~/bycatch-data/cache/planets/`; Gaia queries retry.
+
+EXOTIC pitfalls found (fixed on exotic-private branch
+`huw-leggate/float-background-and-quickfit-epoch`, MR pending; worked around
+here until it merges):
 
 - `skybg_phot` returns the *mode* of a box (star included) around each
   source. That's fine on integer ADU, but random on flat-fielded float data
