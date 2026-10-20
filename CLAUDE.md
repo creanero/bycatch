@@ -296,19 +296,21 @@ Archive outages seen: the NASA Exoplanet Archive returned HTTP 526 for over
 an hour, and Gaia gave intermittent 500s. Planet rows are cached in
 `~/bycatch-data/cache/planets/`; Gaia queries retry.
 
-EXOTIC pitfalls found (fixed in exotic-private main 801067c; the bycatch workarounds are removed, cheetah exotic at b06f311). Was: (fixed on exotic-private branch
-`huw-leggate/float-background-and-quickfit-epoch`, MR pending; worked around
-here until it merges):
+EXOTIC pitfalls found here, now fixed in exotic-private `main` (801067c).
+The bycatch workarounds are removed, and cheetah's exotic copy is at b06f311
+(main plus the grid fix on `huw-leggate/batched-grid-photometry`). Make sure
+any exotic copy includes 801067c.
 
-- `skybg_phot` returns the *mode* of a box (star included) around each
-  source. That's fine on integer ADU, but random on flat-fielded float data
-  (20–30% flux errors). `pipeline.wfi._for_exotic` rounds frames to whole
-  ADU.
-- `quick_fit.fit_transit` fits absolute BJD, so curve_fit's finite-difference
-  step on tmid is ~50 min and fits stall or half-converge.
-  `lightcurve.fit_with_airmass` fits times relative to the night, from a
-  grid start, with 4σ clipping. `python -m pipeline.refit RESULTS.json`
-  refits stored results.
+- `skybg_phot` used to take the *mode* of a box around each source, which
+  on flat-fielded float data is the smallest pixel (20–30% flux errors).
+  On non-integer data it now uses a clipped annulus median, so calibrated
+  frames go in as floats. That took WASP-4 from 0.12% to 0.05% rms and
+  POTS-1 from 2.3% to 1.1%.
+- `quick_fit.fit_transit` used to fit absolute BJD, where curve_fit's
+  finite-difference step on tmid is ~50 min, so fits stalled. It now fits
+  relative to the night. `lightcurve.fit_with_airmass` still adds a grid
+  start and 4σ clipping. `python -m pipeline.refit RESULTS.json` refits
+  stored results.
 - Centroid fitting costs ~70 ms per source per frame. `pipeline.wfi`
   splits sources across processes (`--workers`).
 
