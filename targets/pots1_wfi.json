@@ -1,0 +1,16 @@
+{
+  "name": "POTS-1 b, WFI, night of 2007-05-10",
+  "purpose": "Pipeline test: recover a known transit (full transit with ~2.5 h baseline either side) in a dense wide field.",
+  "archive": "ESO",
+  "instrument": "WFI",
+  "prog_id": "079.A-9003(A)",
+  "object": "OTSF-1A",
+  "filter": "BB#RC/162_ESO844",
+  "night": 54230,
+  "known_planets": ["POTS-1 b"],
+  "calibrations": {
+    "BIAS": false,
+    "FLAT,SKY": true,
+    "FLAT,SCREEN": true
+  }
+}

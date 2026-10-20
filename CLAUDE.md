@@ -1,0 +1,226 @@
+# CLAUDE.md
+
+Guidance for Claude Code (and humans) working in this repo.
+
+## What this repo is
+
+Astronomical Bycatch: extract exoplanet transits from stars that happen to be
+"in the background" of archival images. See `README.md` for the premise and
+`images/structure.svg` for the high-level design (archive → extraction API →
+database → short/long-term transit analysis).
+
+Layout:
+
+- `photometry/` — the current photutils-based pipeline (D. Lawley, adapted by
+  D. Winters). `target_star_photometry.py` aligns frames with astroalign and
+  does target/comparison photometry; `bycatch_photometry.py` detects every
+  source with DAOStarFinder and photometers them all; `fwhm_calibration.py`
+  derives FWHM and aperture/annulus radii from the reference frame;
+  `config.py` holds paths and parameters (still hard-coded, Windows paths).
+- `database/` — kdb+/q schema (`targetStarOnly.q`: `sources`,
+  `obs_sessions`, `observations`) and its design notes.
+- `publications/`, `images/` — posters and figures.
+
+## Relationship to EXOTIC (`~/work/exotic-gitlab/exotic-private`)
+
+This repo is the consumer of the new extraction API being built in the
+private EXOTIC fork (GitLab canonical; see that repo's `CLAUDE.md` and
+`docs/tests-and-extraction-api.md`). **The intention is to use that API to get
+light curves for the targets we define here**, rather than growing a second,
+parallel photometry stack in `photometry/`.
+
+The API lives in `exotic/extract/` (not `exotic/api/`, which is EXOTIC's
+older library code). It does no file I/O and no source search — the caller
+reads frames and supplies positions.
+
+- **Layer 0** primitives: `photometry.py` (`fit_centroid`, `skybg_phot`,
+  `aperture_sum`, `grid_photometry`), `timing.py` (JD/BJD_TDB, airmass),
+  `calibration.py` (`apply_cals`), `alignment.py` (`find_transform`,
+  astroalign-based), `uncertainty.py` (`ccd_flux_uncertainty`).
+- **Layer 1** `frame.extract_frame(frame_data, positions, *, aperture_r,
+  annulus_r_in, annulus_r_out, gain, read_noise, bias_level_per_pixel=0)` →
+  list of `ExtractedSource` (centroid, flux, uncertainty, PSF params). A
+  failed centroid gives a NaN row rather than raising.
+- **Layer 2** `sequence.extract_sequence(frames, positions=None, *,
+  sky_positions=None, ra, dec, observatory, apertures, gain, read_noise,
+  bias_level_per_pixel=0, dark=None, bias=None, flat=None, align=True)` →
+  numpy structured array (`SEQUENCE_DTYPE`), one row per frame per source,
+  frame-major, with `bjd_tdb`, `jd_utc`, `airmass`, `aligned`, the radii, the
+  `ExtractedSource` fields and the centroid's `ra`/`dec`.
+  - `frames` is an iterable of `(data, header)`; the first is the reference.
+    A generator keeps memory flat.
+  - Sources as reference-frame pixels or as RA/Dec (`sky_positions`, via the
+    reference header's WCS). RA/Dec out lets the same star be linked across
+    sequences — this is what the database needs.
+  - Bad frames are flagged, not dropped; mask on `aligned` and finite `flux`.
+- **Aperture strategies** (`apertures.py`): `Apertures(r, r_in, r_out)`
+  fixed, or `FwhmScaled()` which measures FWHM on the reference frame. Its
+  defaults (1.9, 1.1, 2.1) reproduce this repo's `config.py` coefficients
+  (2.6, 1.55, 2.9) on HAT-P-32; the difference is only that EXOTIC's Gaussian
+  FWHM is ~1.38x IRAFStarFinder's. On new data they are a starting point.
+- **Transit fit**: `exotic.api.quick_fit.fit_transit(...)`.
+- Worked examples: `examples/extract_api/{single_frame_extract,
+  light_curve_extract, light_curve_fit}.py` in the EXOTIC repo.
+
+Known open items on the EXOTIC side that affect us:
+
+- Gain / read noise / bias pedestal are not yet calibrated for any dataset;
+  the examples use placeholders, so uncertainties are not yet scientific.
+  The HAT-P-32 validation is blocked on getting real dark frames.
+- astroalign's RANSAC is unseeded, so alignment (and hence centroids) is not
+  bit-reproducible run to run.
+
+EXOTIC runs inside its Docker image (`make` targets in that repo), not host
+Python; use that environment when calling the API from here.
+
+## Target data
+
+Still being defined. Targets we pick should be recorded here (or in a data
+file this section points to) with: field RA/Dec, source list (RA/Dec),
+archive and query used, instrument, observatory site, and which calibration
+frames exist.
+
+### Data source: ESO Science Archive
+
+<https://archive.eso.org/eso/eso_archive_main.html> — the ESO raw-data query
+form for La Silla Paranal instruments. Notes so far:
+
+- Searches **raw frames** only (reduced Phase 3 products are a separate
+  portal). Queries by target (SIMBAD/NED resolved), RA/Dec box, night or
+  date range, programme ID/type, instrument, exposure time, filter, and by
+  category (SCIENCE/CALIB/…), type (OBJECT/BIAS/DARK/FLAT…) and mode (IMAGE,
+  SPECTRUM, …). Output as HTML, ASCII or VOTable; downloads can include
+  associated calibrations.
+- Programmatic access (verified): the ESO TAP service handles metadata
+  search; `astroquery.eso.Eso().retrieve_data([dp_id])` downloads public
+  frames without a login (it fetches `.fits.Z` and decompresses it).
+- Why it is attractive for bycatch: long imaging time series from many
+  programmes, with **bias/dark/flat calibrations archived alongside** — which
+  is exactly what EXOTIC's flux-uncertainty work is currently missing.
+- Things to check before committing to it:
+  - Proprietary periods: only data past its proprietary period is public.
+  - Which imaging instruments/modes give useful bycatch (field of view, depth,
+    cadence, sequence length) — restrict to `mode = IMAGE`, science `OBJECT`
+    frames, and long same-field sequences in one night.
+  - Raw ESO frames are often multi-extension FITS (mosaic detectors); each
+    detector/extension is its own `(data, header)` sequence for
+    `extract_sequence`.
+  - Header keywords: ESO uses `HIERARCH ESO ...` keywords; confirm EXOTIC's
+    `timing.py` reads the right time/exposure keywords, and that the raw WCS
+    is good enough for `sky_positions` (or plate-solve first).
+  - Observatory site (`Observatory(lat, lon, elev)`) per telescope —
+    Paranal vs La Silla — ideally read from the header's telescope-site
+    keywords rather than hard-coded.
+  - Gain / read noise per instrument and readout mode, from headers or
+    instrument documentation.
+
+### ESO survey results (20 Oct 2026, metadata only)
+
+Queried via the ESO TAP service (`https://archive.eso.org/tap_obs`,
+table `dbo.raw`) and the NASA Exoplanet Archive TAP (`pscomppars`,
+`tran_flag=1`). Scripts were ad hoc; turn them into `access/` code before
+relying on them.
+
+- Public science imaging frames: OmegaCAM ~447k, VIRCAM ~2.0M (NIR,
+  jittered pawprints, poor for transits), WFI ~189k, FORS2 ~264k, HAWK-I
+  ~189k, SOFI ~792k, EFOSC ~161k.
+- ESO's ADQL rejects `FLOOR` / grouping by expressions, so nights have to be
+  formed client side: pull per-frame metadata (`instrument, prog_id, object,
+  filter_path, mjd_obs, ra, dec, exposure`) and group by
+  `night = floor(mjd_obs - 0.5)`. Pulling all WFI + OmegaCAM rows (~640k)
+  takes a few minutes with `run_async`.
+- Long same-pointing sequences (≥40 frames, ≥2 h, pointing scatter <0.1°):
+  132 WFI, 50 OmegaCAM. Only two known transiting planets fall in any of
+  them; only one has a transit in the window.
+
+**Test target: POTS-1 b, ESO/MPG 2.2 m WFI, night of 2007-05-10/11.**
+
+- Field `OTSF-1A` (Pre-OmegaTranS), programme `079.A-9003(A)`, Rc filter
+  (`BB#RC/162_ESO844`), 310 frames × 26 s over 8.2 h. Ephemeris predicts a full
+  transit with 2.5 h of baseline before and 2.8 h after (T_c uncertainty
+  <1 min). POTS-1 is V≈17.9 with a deep transit; this survey is where it was
+  found, so it tests whether we recover a known result, not an independent
+  detection. The field is dense Galactic disk, so there's plenty of bycatch.
+- Calibrations the same night: 10 Rc biases, 14 Rc sky flats, 5 Rc screen
+  flats.
+- Size: ~60 MB compressed / 142 MB uncompressed per frame, so ~18 GB
+  compressed for the night.
+- One frame (`WFI.2007-05-11T03:46:56.142`) inspected. What it shows:
+  - 8 image extensions (`WIN1.CHIPn.OUTm`), each 4128×2142 *including
+    overscan/prescan*, which must be trimmed before photometry.
+  - **No celestial WCS** (`CTYPE = PIXEL`). `sky_positions` won't work on
+    raw frames: plate-solve the reference frame (per chip) first.
+  - Site in `HIERARCH ESO TEL GEOLAT/GEOLON/GEOELEV` (−29.2543, −70.7346,
+    2335 m); time in `MJD-OBS`/`DATE-OBS`, `EXPTIME`; airmass in
+    `ESO TEL AIRM START/END` (there's no plain `AIRMASS` keyword).
+  - Header gain/read noise are unreliable (0.0 or missing on most chips), so
+    take them from the WFI instrument documentation.
+
+### Data source: MicroObservatory frames (collaborator's private repo)
+
+Raw MicroObservatory frames of several hot-Jupiter targets (WASP-36,
+HAT-P-32, HAT-P-36, WASP-12, Qatar-2, HAT-P-54, WASP-140). These are
+target-centred frames from the camera EXOTIC is already validated on, so
+they suit per-target extraction checks and bycatch of the field stars. ESO
+WFI is the wide-field, deep complement. Where the repo is, and where it is
+cloned: `CLAUDE.local.md`.
+
+## Plan
+
+1. **Data access (`access/`)**: astroquery/pyvo search → sequence table →
+   download. Keep data on the compute host's data share, not on
+   laptops. Stream it: a generator downloads a frame, yields one chip's
+   trimmed `(data, header)` to `extract_sequence`, and the cache can be
+   cleared afterwards. Plan for one full download (~18 GB) for the test
+   night, since `extract_sequence` needs one pass per chip.
+2. **Instrument adapter**: per-instrument trimming, chip layout,
+   gain/read noise, site and time keywords, and building master bias/flat
+   from the same night's CALIB frames.
+3. **Astrometry**: no local astrometry.net on the compute host. Options are a Gaia
+   query (`astroquery.gaia`, available) matched to detected sources, giving
+   a fitted WCS per chip of the reference frame, or installing
+   astrometry.net with the index files for a ~0.5° field. Prefer Gaia
+   matching: no external upload, and Gaia IDs give the database a stable
+   source key.
+4. **Extraction**: `exotic.extract.extract_sequence` with Gaia
+   `sky_positions` (target + all detected sources), `FwhmScaled()`, real
+   calibrations. Run on the compute host.
+5. **Validation**: `exotic.api.quick_fit.fit_transit` on POTS-1, comparing
+   T_mid and depth with the published ephemeris.
+6. **Results store (JSON for now)**: one file per (sequence, chip), e.g.
+   `results/<instrument>/<night>/<chip>.json`, holding sequence metadata
+   (archive, dp_ids, instrument, filter, site, apertures, gain, exotic
+   version) and per-source light curves keyed by Gaia DR3 ID (ra, dec,
+   bjd_tdb[], flux[], uncertainty[], flags). Maps onto the q schema's
+   `sources` / `obs_sessions` / `observations` later.
+
+## Data access code (`access/`, `targets/`)
+
+- `access/eso.py`: TAP queries (`query_frames`, `find_sequences`,
+  `sequence_frames`, `night_calibrations`) and a threaded `download` that
+  skips files already present.
+- `access/transits.py`: NASA Exoplanet Archive ephemerides (`transiting_planets`)
+  and `transits_in(sequences, planets)` to find sequences catching a transit.
+- `access/fetch.py`: `python -m access.fetch targets/<t>.json [--data-root
+  ~/bycatch-data] [--manifest-only]`. Writes
+  `<root>/eso/<instrument>/<night>_<object>/manifest.json` (every science and
+  calibration frame's ESO metadata) and downloads into `science/` and
+  `calib/`. Restartable.
+- `targets/*.json`: one per target sequence. Gives archive, instrument,
+  prog_id, object, filter, night (`floor(MJD-0.5)`) and `calibrations`:
+  dp_type → `true` (same filter as the science frames) / `false` (any filter).
+- Data root defaults to `~/bycatch-data`. The POTS-1 test night is
+  `<root>/eso/wfi/54230_OTSF-1A/`: 310 science + 38 calibration frames,
+  ~50 GB uncompressed.
+
+## Local setup
+
+Machine-specific details (compute host, environments, data locations,
+private data sources) are in `CLAUDE.local.md`. It is gitignored: keep
+hostnames, accounts and private repo details there, not here, because this
+repo is public.
+
+## Working conventions
+
+- Branch names include the author's name, e.g. `huw-leggate/<topic>`.
+- Don't commit bytecode (`__pycache__`) or large data/FITS files.

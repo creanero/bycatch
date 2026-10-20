@@ -1,0 +1,4 @@
+astropy
+astroquery>=0.4.10
+numpy
+pyvo
