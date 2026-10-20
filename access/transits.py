@@ -16,7 +16,16 @@ NEA_TAP_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP"
 DEFAULT_DURATION_HOURS = 3.0
 
 # Half-width of each instrument's field of view, in degrees.
-FIELD_HALF_WIDTH = {"WFI": 0.27, "OMEGACAM": 0.48}
+FIELD_HALF_WIDTH = {"WFI": 0.27, "OMEGACAM": 0.48, "FORS1": 0.057, "FORS2": 0.057, "EFOSC": 0.034,
+                    "HAWKI": 0.06, "SOFI": 0.041}
+
+
+def _value(v, default=0.0):
+    """A catalogue value as a float, with ``default`` for missing (masked) or non-finite entries."""
+    if np.ma.is_masked(v):
+        return default
+    v = float(v)
+    return v if np.isfinite(v) else default
 
 
 def transiting_planets(max_dec=30.0):
@@ -45,7 +54,7 @@ def transits_in(sequences, planets, half_width=FIELD_HALF_WIDTH):
         start, end = seq["mjd_start"] + 2400000.5, seq["mjd_end"] + 2400000.5
         for pl in planets[in_field]:
             period, tc0 = pl["pl_orbper"], pl["pl_tranmid"]
-            hours = pl["pl_trandur"] if np.isfinite(pl["pl_trandur"]) else DEFAULT_DURATION_HOURS
+            hours = _value(pl["pl_trandur"], DEFAULT_DURATION_HOURS)
             duration = hours / 24
             for n in np.arange(np.ceil((start - tc0) / period) - 1, np.floor((end - tc0) / period) + 2):
                 tc = tc0 + n * period
@@ -53,8 +62,7 @@ def transits_in(sequences, planets, half_width=FIELD_HALF_WIDTH):
                 coverage = (min(egress, end) - max(ingress, start)) / duration
                 if coverage <= 0:
                     continue
-                sigma = np.hypot(np.nan_to_num(pl["pl_tranmiderr1"]),
-                                 abs(n) * np.nan_to_num(pl["pl_orbpererr1"])) * 24 * 60
+                sigma = np.hypot(_value(pl["pl_tranmiderr1"]), abs(n) * _value(pl["pl_orbpererr1"])) * 24 * 60
                 rows.append((pl["pl_name"], seq["instrument"], seq["prog_id"], seq["object"], seq["filter"],
                              int(seq["night"]), int(seq["n_frames"]), tc, min(coverage, 1.0),
                              (ingress - start) * 24, (end - egress) * 24, sigma,
