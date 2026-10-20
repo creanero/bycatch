@@ -4,6 +4,7 @@
 \usepackage{graphicx}
 \usepackage{siunitx}
 \usepackage{enumitem}
+\usepackage[font=small,labelfont=bf]{caption}
 \usepackage[hidelinks]{hyperref}
 \setlist{itemsep=2pt,topsep=4pt}
 \sisetup{separate-uncertainty=true}
@@ -84,36 +85,72 @@ kept on laptops. Code is on the \texttt{huw-leggate/claude-md} branch of
 \subsection{HAT-P-32\,b: validation}
 
 142 frames of \SI{60}{s}. The plate solve matched 184 Gaia stars to
-\SI{1.5}{arcsec}, and 83 stars were photometered. The fit uses EXOTIC's
-\texttt{fit\_transit} (least squares) with a linear airmass trend removed.
+\SI{1.5}{arcsec}, and 83 stars were photometered. The target's light curve
+is its flux divided by the summed flux of the comparison stars. It was
+fitted with EXOTIC's least-squares \texttt{fit\_transit}, with a linear
+airmass trend removed. Three parameters are free: the mid-transit time
+$T_\mathrm{mid}$, the planet-to-star radius ratio $R_p/R_s$, and a flux
+scale. $R_p/R_s$ is the planet's radius divided by its host star's radius,
+which sets the transit depth (depth $\approx (R_p/R_s)^2$). The orbit
+(period, $a/R_s$, inclination) and the limb darkening are held fixed.
+Table~\ref{tab:hatp32} gives the results for three aperture sizes, and
+Figure~\ref{fig:hatp32} shows the light curve.
 
-\begin{center}
+\begin{table}[ht]
+\centering
+\caption{HAT-P-32\,b transit fits for three photometric aperture radii,
+given as multiples of the measured stellar FWHM. \emph{Scatter} is the
+point-to-point scatter of the relative light curve. $T_\mathrm{mid}$ is
+given relative to EXOTIC's own result for this night
+($2458107.71380$\,BJD$_\mathrm{TDB}$). $R_p/R_s$ is the fitted
+planet-to-star radius ratio; the published value is 0.149.}
+\label{tab:hatp32}
 \begin{tabular}{lcccc}
 \toprule
-Aperture & Radius (px) & Scatter & $T_\mathrm{mid}-$ EXOTIC result (min) & $R_p/R_s$ \\
+Aperture & Radius (px) & Scatter & $T_\mathrm{mid}$ offset (min) & Fitted $R_p/R_s$ \\
 \midrule
 $1.0\times$FWHM & 2.5 & 0.53\% & $-0.6\pm2.6$ & $0.151\pm0.003$ \\
 $1.4\times$FWHM & 3.5 & 0.48\% & $+2.1\pm2.4$ & $0.157\pm0.003$ \\
 $1.9\times$FWHM & 4.7 & 0.57\% & $+4.0\pm2.8$ & $0.156\pm0.004$ \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
 
-EXOTIC's result for this night is $T_\mathrm{mid}=2458107.71380$\,BJD$_\mathrm{TDB}$
-and the published $R_p/R_s$ is 0.149. Our $R_p/R_s$ runs slightly high,
-probably because of the fixed, approximate limb darkening.
+All three mid-transit times are within ${\sim}1.5\sigma$ of EXOTIC's
+result. The fitted $R_p/R_s$ runs 1--5\% above the published 0.149,
+probably because the limb darkening is fixed at approximate values; a
+depth error doesn't move the timing.
 
-\begin{center}
+\begin{figure}[ht]
+\centering
 \includegraphics[width=0.8\textwidth]{figs/hatp32.png}
-\end{center}
+\caption{HAT-P-32\,b relative light curve (grey points) with the fitted
+transit model (red), using the $1.4\times$FWHM aperture. The x-axis is
+hours from the predicted mid-transit time. The fitted $T_\mathrm{mid}$ is
+\SI{5.7}{min} after the ephemeris prediction and \SI{2.1}{min} after
+EXOTIC's result (Table~\ref{tab:hatp32}).}
+\label{fig:hatp32}
+\end{figure}
 
 \subsection{WASP-36\,b}
 
 55 frames of \SI{60}{s}. Plate solving and frame alignment worked, but the
-target ($G=12.6$) is sky-noise limited: scatter is 2.3\% per point at best
-(aperture $1.0\times$FWHM). The transit is ${\sim}1.8\%$ deep, and a
-66-minute gap leaves only 3 frames before ingress. The fit is consistent
-with the prediction ($+26\pm43$\,min) but not useful for timing.
+target ($G=12.6$) is limited by sky noise: the best scatter is 2.3\% per
+point, with a $1.0\times$FWHM aperture. The transit is ${\sim}1.8\%$ deep,
+and a 66-minute gap leaves only 3 frames before ingress. The fit
+(Figure~\ref{fig:wasp36}) puts $T_\mathrm{mid}$ $+26\pm43$\,min from the
+prediction and $R_p/R_s=0.09\pm0.06$ (published 0.134). Both are
+consistent with expectations, but too uncertain to be useful.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.8\textwidth]{figs/wasp36.png}
+\caption{WASP-36\,b relative light curve (grey points) with the fitted
+transit model (red), using the $1.0\times$FWHM aperture. The dashed grey
+line is the predicted mid-transit time and the dotted red line the fitted
+one. The scatter is comparable to the transit depth.}
+\label{fig:wasp36}
+\end{figure}
 
 \subsection{POTS-1\,b, WFI (in progress)}
 
