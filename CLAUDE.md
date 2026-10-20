@@ -245,6 +245,28 @@ First run, WASP-36 b (MicroObservatory, 2026-01-05, 55 × 60 s):
   0.4 min. A 66 min gap leaves only 3 frames of pre-ingress baseline, and
   there are no flats or darks.
 
+Validation run, HAT-P-32 b (MicroObservatory, 2017-12-20, 142 × 60 s; the
+same frames as EXOTIC's `HatP32Dec202017` sample data):
+
+- Solve: 184 Gaia stars, 1.5" RMS. Target G=11.1; 83 sources photometered.
+- Against EXOTIC's full-reduction validation anchor (2458107.7137986
+  BJD_TDB):
+
+  | aperture | radius | scatter | T_mid − anchor | Rp/Rs |
+  | --- | --- | --- | --- | --- |
+  | 1.0 × FWHM | 2.5 px | 0.53% | −0.6 ± 2.6 min | 0.151 ± 0.003 |
+  | 1.4 × FWHM | 3.5 px | 0.48% | +2.1 ± 2.4 min | 0.157 ± 0.003 |
+  | 1.9 × FWHM | 4.7 px | 0.57% | +4.0 ± 2.8 min | 0.156 ± 0.004 |
+
+  All within ~1.5σ of the anchor. Published Rp/Rs is 0.149. The fit is a
+  least-squares `fit_transit` with fixed rough limb darkening and a linear
+  airmass trend, not EXOTIC's nested-sampling fit, so a few minutes'
+  aperture-dependent spread is expected.
+- The optimum aperture is ~1.4 × FWHM here, not the smallest. WASP-36's
+  monotonic trend is a faint-star (sky-limited) effect, not a pipeline bug.
+- Inits coordinates can be rounded by ~10"; the target is matched to the
+  brightest Gaia star within 15".
+
 ## Local setup
 
 Machine-specific details (compute host, environments, data locations,

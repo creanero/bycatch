@@ -51,6 +51,9 @@ log = logging.getLogger("pipeline.microobs")
 
 PIXEL_SCALE_GUESS = 5.2       # arcsec/px; the solve fits the real value
 GAIN, READ_NOISE = 1.0, 0.0   # placeholders, not a calibration
+# The site exotic.exotic's main() substitutes for any frame whose CREATOR
+# says MicroObservatory, whatever the inits file gives.
+MOBS_SITE = Observatory(latitude=31.675467, longitude=-110.951376, elevation=1268)
 # Rough Claret 4-parameter coefficients for a Sun-like star in a clear
 # filter, as in EXOTIC's examples. Good enough for timing, not for depth.
 LIMB_DARKENING = (0.0, 0.9, 0.0, -0.2)
@@ -85,9 +88,12 @@ def choose_sources(reference, wcs, gaia, target, g_max, edge_px=20, blend_px=12,
     peak reaches 95% of the frame's maximum (saturated).
     """
     sky = SkyCoord(np.asarray(gaia["ra"]) * u.deg, np.asarray(gaia["dec"]) * u.deg)
-    target_index = int(np.argmin(sky.separation(target)))
-    if sky[target_index].separation(target) > 5 * u.arcsec:
-        raise RuntimeError("target has no Gaia counterpart within 5 arcsec")
+    # Inits coordinates are often rounded to 1 s of RA / 1 arcsec, ~10 arcsec
+    # at high declination, so take the brightest Gaia star within 15 arcsec.
+    near = np.nonzero(sky.separation(target) < 15 * u.arcsec)[0]
+    if len(near) == 0:
+        raise RuntimeError("target has no Gaia counterpart within 15 arcsec")
+    target_index = int(near[np.argmin(np.asarray(gaia["phot_g_mean_mag"])[near])])
 
     x, y = wcs.world_to_pixel(sky)
     ny, nx = reference.shape
@@ -153,13 +159,42 @@ def fit_with_airmass(times, flux, airmass, planet, n_iter=3):
                             "model": model, "detrended": flux / trend}
 
 
+def inits_value(section, prefix):
+    """Value of the first key in an EXOTIC inits section starting with ``prefix``.
+
+    Key wording varies between EXOTIC versions (e.g. the elevation key's note).
+    """
+    for key, value in section.items():
+        if key.startswith(prefix):
+            return value
+    raise KeyError(prefix)
+
+
+def target_coord(inits):
+    """Target RA/Dec from an inits file, in decimal degrees or sexagesimal."""
+    pp = inits["planetary_parameters"]
+    ra, dec = pp["Target Star RA"], pp["Target Star Dec"]
+    if isinstance(ra, str) and ":" in ra:
+        return SkyCoord(ra, dec, unit=(u.hourangle, u.deg))
+    return SkyCoord(float(ra) * u.deg, float(dec) * u.deg)
+
+
+def site_from(inits, header):
+    if str(header.get("CREATOR", "")).startswith("MicroObservatory"):
+        return MOBS_SITE
+    ui = inits["user_info"]
+    return Observatory(latitude=float(ui["Obs. Latitude"]), longitude=float(ui["Obs. Longitude"]),
+                       elevation=float(inits_value(ui, "Obs. Elevation")))
+
+
 def planet_from_inits(inits, bjd_mid):
     pp = inits["planetary_parameters"]
+    target = target_coord(inits)
     per = float(pp["Orbital Period (days)"])
     t0 = float(pp["Published Mid-Transit Time (BJD-UTC)"])
     epoch = int(np.round((bjd_mid - t0) / per))
     sigma = np.hypot(float(pp["Mid-Transit Time Uncertainty"]), abs(epoch) * float(pp["Orbital Period Uncertainty"]))
-    return {"name": pp["Planet Name"], "ra": float(pp["Target Star RA"]), "dec": float(pp["Target Star Dec"]),
+    return {"name": pp["Planet Name"], "ra": target.ra.deg, "dec": target.dec.deg,
             "per": per, "ars": float(pp["Ratio of Distance to Stellar Radius (a/Rs)"]),
             "inc": float(pp["Orbital Inclination (deg)"]), "ecc": float(pp["Orbital Eccentricity (0 if null)"]),
             "omega": float(pp["Argument of Periastron (deg)"]),
@@ -170,17 +205,14 @@ def planet_from_inits(inits, bjd_mid):
 
 def run(frames_dir, inits_path, out_path, g_max=13.5, plot_path=None, aperture_coeff=None):
     inits = json.loads(Path(inits_path).read_text())
-    ui = inits["user_info"]
-    site = Observatory(latitude=float(ui["Obs. Latitude"]), longitude=float(ui["Obs. Longitude"]),
-                       elevation=float(ui["Obs. Elevation (meters; Note: leave blank if unknown)"]))
-    pp = inits["planetary_parameters"]
-    target = SkyCoord(float(pp["Target Star RA"]) * u.deg, float(pp["Target Star Dec"]) * u.deg)
+    target = target_coord(inits)
 
     science, darks = read_frames(frames_dir)
     dark = master_dark(darks)
     log.info("%d science frames, %d darks", len(science), len(darks))
 
     ref_header = fits.getheader(science[0])
+    site = site_from(inits, ref_header)
     reference = fits.getdata(science[0]).astype(float)
     if dark is not None:
         reference = reference - dark
@@ -274,7 +306,7 @@ def run(frames_dir, inits_path, out_path, g_max=13.5, plot_path=None, aperture_c
         import matplotlib.pyplot as plt
         t = (bjd_precise[good] - planet["tmid_predicted"]) * 24
         fig, ax = plt.subplots(figsize=(8, 4.5))
-        ax.plot(t, detrended, ".", color="0.4", label="WASP-36 / comparison ensemble, airmass-detrended")
+        ax.plot(t, detrended, ".", color="0.4", label=f"{planet['name']} host / comparison ensemble, airmass-detrended")
         order = np.argsort(t)
         ax.plot(t[order], model[order], "-", color="C3", label="fit_transit")
         f = fits_out["date_obs"]
