@@ -296,7 +296,7 @@ Archive outages seen: the NASA Exoplanet Archive returned HTTP 526 for over
 an hour, and Gaia gave intermittent 500s. Planet rows are cached in
 `~/bycatch-data/cache/planets/`; Gaia queries retry.
 
-EXOTIC pitfalls found (fixed on exotic-private branch
+EXOTIC pitfalls found (fixed in exotic-private main 801067c; the bycatch workarounds are removed, cheetah exotic at b06f311). Was: (fixed on exotic-private branch
 `huw-leggate/float-background-and-quickfit-epoch`, MR pending; worked around
 here until it merges):
 

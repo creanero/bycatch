@@ -293,16 +293,14 @@ def planet_parameters(name, bjd_mid):
 
 
 def _for_exotic(image):
-    """A calibrated frame in the form EXOTIC's background estimate needs: whole ADU.
+    """A calibrated frame ready for EXOTIC: dead/vignetted (NaN) pixels set to zero.
 
-    ``exotic.extract.photometry.skybg_phot`` takes the statistical mode of the
-    pixel values around each star. On flat-fielded float data almost every
-    value is unique, so the mode is an arbitrary pixel and the background jumps
-    by tens of ADU from frame to frame (20-30% flux errors at G~17 on WFI).
-    Rounding to integers restores a meaningful mode, at a cost of 0.29 ADU rms
-    of quantisation noise against ~7 ADU of sky noise.
+    Earlier this also rounded to whole ADU, because EXOTIC's ``skybg_phot``
+    took a mode that fails on non-integer data. EXOTIC now uses a clipped
+    annulus median on such data (exotic-private 138d0df), so frames go in as
+    calibrated floats.
     """
-    return np.round(np.nan_to_num(image, nan=0.0))
+    return np.nan_to_num(image, nan=0.0)
 
 
 def _extract_chunk(job):

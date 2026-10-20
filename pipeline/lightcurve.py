@@ -119,20 +119,16 @@ def _grid_start(times, flux, planet, tmid0, half_width_days=0.06, n_tmid=121):
 def fit_with_airmass(times, flux, airmass, planet, n_iter=3, clip_sigma=4.0):
     """``fit_transit`` with a linear airmass trend divided out and outliers clipped between fits.
 
-    Times are fitted relative to the integer day before the first point.
-    ``fit_transit``'s finite-difference steps scale with the parameter
-    value, so at BJD ~2.45e6 the step on ``tmid`` is ~50 minutes and the
-    optimiser can fail to move. The start comes from a coarse grid
-    (``_grid_start``). Points more than ``clip_sigma`` robust standard
-    deviations from the model are dropped from the next iteration;
-    ``extra["kept"]`` marks the points used in the final fit.
+    The start comes from a coarse grid (``_grid_start``). Points more than
+    ``clip_sigma`` robust standard deviations from the model are dropped
+    from the next iteration; ``extra["kept"]`` marks the points used in the
+    final fit. (``fit_transit`` itself now fits relative to the night, so
+    absolute BJD is fine here: exotic-private 138d0df.)
     """
-    times = np.asarray(times, dtype=float)
+    t = np.asarray(times, dtype=float)
     flux = np.asarray(flux, dtype=float)
     airmass = np.asarray(airmass, dtype=float)
-    t_ref = np.floor(times.min())
-    t = times - t_ref
-    local = dict(planet, tmid_predicted=planet["tmid_predicted"] - t_ref)
+    local = planet
 
     kept = np.isfinite(t) & np.isfinite(flux) & np.isfinite(airmass)
     trend = np.ones_like(flux)
@@ -149,7 +145,7 @@ def fit_with_airmass(times, flux, airmass, planet, n_iter=3, clip_sigma=4.0):
             mad = 1.4826 * np.median(np.abs(residuals[kept] - np.median(residuals[kept])))
             kept = kept & (np.abs(residuals) < clip_sigma * mad)
         tmid_guess, rprs_guess = values["tmid"], abs(values["rprs"])
-    values = dict(values, tmid=values["tmid"] + t_ref, rprs=abs(values["rprs"]))
+    values = dict(values, rprs=abs(values["rprs"]))
     residuals = flux / trend - model
     return values, errors, {"airmass_poly": coeffs.tolist(), "rms": float(np.std(residuals[kept])),
                             "model": model, "detrended": flux / trend, "kept": kept,
