@@ -39,12 +39,11 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.time import Time
 
-from exotic.api.elca import transit
-from exotic.api.quick_fit import fit_transit
 from exotic.extract.apertures import FwhmScaled
 from exotic.extract.sequence import Observatory, extract_sequence
 
 from . import store
+from .lightcurve import LIMB_DARKENING, choose_sources, fit_with_airmass, pick_comparisons
 from .astrometry import gaia_stars, solve_wcs_robust
 
 log = logging.getLogger("pipeline.microobs")
@@ -54,9 +53,6 @@ GAIN, READ_NOISE = 1.0, 0.0   # placeholders, not a calibration
 # The site exotic.exotic's main() substitutes for any frame whose CREATOR
 # says MicroObservatory, whatever the inits file gives.
 MOBS_SITE = Observatory(latitude=31.675467, longitude=-110.951376, elevation=1268)
-# Rough Claret 4-parameter coefficients for a Sun-like star in a clear
-# filter, as in EXOTIC's examples. Good enough for timing, not for depth.
-LIMB_DARKENING = (0.0, 0.9, 0.0, -0.2)
 
 
 def read_frames(frames_dir):
@@ -80,83 +76,10 @@ def date_obs_jd_mid(header):
     return Time(when, scale="utc").jd + float(header.get("EXPTIME", 0.0)) / 2 / 86400
 
 
-def choose_sources(reference, wcs, gaia, target, g_max, edge_px=20, blend_px=12, blend_dmag=2.5):
-    """Indices into ``gaia`` of usable field stars, and the target's index.
-
-    Drops stars within ``edge_px`` of the frame edge, stars with a neighbour
-    no more than ``blend_dmag`` fainter within ``blend_px``, and stars whose
-    peak reaches 95% of the frame's maximum (saturated).
-    """
-    sky = SkyCoord(np.asarray(gaia["ra"]) * u.deg, np.asarray(gaia["dec"]) * u.deg)
-    # Inits coordinates are often rounded to 1 s of RA / 1 arcsec, ~10 arcsec
-    # at high declination, so take the brightest Gaia star within 15 arcsec.
-    near = np.nonzero(sky.separation(target) < 15 * u.arcsec)[0]
-    if len(near) == 0:
-        raise RuntimeError("target has no Gaia counterpart within 15 arcsec")
-    target_index = int(near[np.argmin(np.asarray(gaia["phot_g_mean_mag"])[near])])
-
-    x, y = wcs.world_to_pixel(sky)
-    ny, nx = reference.shape
-    g = np.asarray(gaia["phot_g_mean_mag"], dtype=float)
-    on = (x > edge_px) & (x < nx - edge_px) & (y > edge_px) & (y < ny - edge_px)
-    saturation = 0.95 * reference.max()
-
-    keep = []
-    for k in np.nonzero(on & (g < g_max))[0]:
-        d = np.hypot(x - x[k], y - y[k])
-        if np.any((d > 0) & (d < blend_px) & (g < g[k] + blend_dmag)):
-            continue
-        xi, yi = int(round(x[k])), int(round(y[k]))
-        if reference[max(yi - 3, 0):yi + 4, max(xi - 3, 0):xi + 4].max() >= saturation:
-            continue
-        keep.append(int(k))
-    keep = [k for k in keep if k != target_index]
-    return [target_index] + keep
 
 
-def pick_comparisons(flux, target_flux, n_max=8, ratio_range=(0.3, 5.0)):
-    """Comparison-star columns of ``flux`` (frames x candidates).
-
-    Candidates must be finite in every frame and within ``ratio_range`` of
-    the target's median flux. The ensemble is then pruned, dropping the star
-    that scatters most against the rest, until ``n_max`` remain.
-    """
-    median_t = np.nanmedian(target_flux)
-    med = np.nanmedian(flux, axis=0)
-    ok = np.all(np.isfinite(flux), axis=0) & (med > ratio_range[0] * median_t) & (med < ratio_range[1] * median_t)
-    chosen = list(np.nonzero(ok)[0])
-    if len(chosen) < 2:
-        raise RuntimeError("fewer than two usable comparison stars")
-
-    def scatter(j, others):
-        ratio = flux[:, j] / flux[:, others].sum(axis=1)
-        ratio = ratio / np.median(ratio)
-        return np.std(np.diff(ratio)) / np.sqrt(2)  # point-to-point, insensitive to slow trends
-
-    while len(chosen) > n_max:
-        worst = max(chosen, key=lambda j: scatter(j, [c for c in chosen if c != j]))
-        chosen.remove(worst)
-    return chosen, {int(j): float(scatter(j, [c for c in chosen if c != j])) for j in chosen}
 
 
-def fit_with_airmass(times, flux, airmass, planet, n_iter=3):
-    """``fit_transit`` with a linear airmass trend divided out between fits."""
-    tmid_guess = planet["tmid_predicted"]
-    trend = np.ones_like(flux)
-    for _ in range(n_iter):
-        values, errors = fit_transit(times, flux / trend, planet["per"], planet["ars"], planet["inc"],
-                                     tmid_guess, planet["rprs"], LIMB_DARKENING,
-                                     ecc=planet["ecc"], omega=planet["omega"])
-        model = values["scale"] * transit(times, dict(
-            per=planet["per"], ars=planet["ars"], inc=planet["inc"], ecc=planet["ecc"], omega=planet["omega"],
-            u0=LIMB_DARKENING[0], u1=LIMB_DARKENING[1], u2=LIMB_DARKENING[2], u3=LIMB_DARKENING[3],
-            tmid=values["tmid"], rprs=values["rprs"]))
-        coeffs = np.polyfit(airmass - 1.0, flux / model, 1)
-        trend = np.polyval(coeffs, airmass - 1.0)
-        tmid_guess = values["tmid"]
-    residuals = flux / trend - model
-    return values, errors, {"airmass_poly": coeffs.tolist(), "rms": float(np.std(residuals)),
-                            "model": model, "detrended": flux / trend}
 
 
 def inits_value(section, prefix):

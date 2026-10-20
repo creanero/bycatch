@@ -76,7 +76,7 @@ def _match(xy, sky_xy, max_px):
 
 
 def solve_wcs(data, ra0, dec0, pixel_scale_arcsec, *, search_radius_deg, g_max=15.0,
-              n_detect=60, n_gaia=120, fwhm=3.0, sip_degree=2, match_px=3.0):
+              n_detect=60, n_gaia=120, fwhm=3.0, sip_degree=2, match_px=3.0, catalogue=None):
     """Fit a celestial WCS to a frame.
 
     ``ra0, dec0`` is the approximate field centre (e.g. the header pointing)
@@ -84,8 +84,17 @@ def solve_wcs(data, ra0, dec0, pixel_scale_arcsec, *, search_radius_deg, g_max=1
     exact scale and rotation. Returns ``(wcs, gaia, stats)``: the WCS, the
     Gaia table it was solved against, and a dict with the number of matched
     stars and the RMS residual in arcsec.
+
+    ``catalogue`` is an already-fetched Gaia table (brightest first) covering
+    the search circle; when given, no Gaia query is made. Pass one when
+    solving many chips or trying many centres over the same field.
     """
-    gaia = gaia_stars(ra0, dec0, search_radius_deg, g_max)
+    if catalogue is None:
+        gaia = gaia_stars(ra0, dec0, search_radius_deg, g_max)
+    else:
+        sep = SkyCoord(np.asarray(catalogue["ra"]) * u.deg, np.asarray(catalogue["dec"]) * u.deg).separation(
+            SkyCoord(ra0 * u.deg, dec0 * u.deg))
+        gaia = catalogue[(sep.deg < search_radius_deg) & (np.asarray(catalogue["phot_g_mean_mag"]) < g_max)]
     detected = detect_stars(data, fwhm=fwhm, n_max=max(n_detect, 200))
     if len(detected) < 10 or len(gaia) < 10:
         raise RuntimeError(f"too few stars to solve: {len(detected)} detected, {len(gaia)} Gaia")
@@ -140,7 +149,7 @@ SOLVE_ATTEMPTS = ((0.55, 40, 60), (0.55, 60, 90), (0.45, 50, 60), (0.7, 80, 160)
 
 
 def solve_wcs_robust(data, centres, pixel_scale_arcsec, *, g_max=15.0, min_matched=20, max_rms_arcsec=2.0,
-                     attempts=SOLVE_ATTEMPTS):
+                     attempts=SOLVE_ATTEMPTS, fwhm=3.0, match_px=3.0, catalogue=None):
     """``solve_wcs`` over several guessed centres and settings; first acceptable solution wins.
 
     ``centres`` is a list of (ra, dec) guesses, e.g. the header pointing and
@@ -152,7 +161,8 @@ def solve_wcs_robust(data, centres, pixel_scale_arcsec, *, g_max=15.0, min_match
         for radius, n_detect, n_gaia in attempts:
             try:
                 wcs, gaia, stats = solve_wcs(data, ra0, dec0, pixel_scale_arcsec, search_radius_deg=radius,
-                                             g_max=g_max, n_detect=n_detect, n_gaia=n_gaia)
+                                             g_max=g_max, n_detect=n_detect, n_gaia=n_gaia, fwhm=fwhm,
+                                             match_px=match_px, catalogue=catalogue)
             except Exception as exc:  # astroalign and fitting failures alike
                 errors.append(f"({ra0:.3f}, {dec0:.3f}, r={radius}): {exc}")
                 continue
