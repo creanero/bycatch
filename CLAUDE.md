@@ -267,6 +267,25 @@ same frames as EXOTIC's `HatP32Dec202017` sample data):
 - Inits coordinates can be rounded by ~10"; the target is matched to the
   brightest Gaia star within 15".
 
+WFI POTS-1 b (night 54230, chip 3, 801 sources, `python -m pipeline.wfi
+calibrate|solve|extract`): recovered at 1.2 × FWHM with O−C +4.7 ± 4.0 min,
+Rp/Rs 0.166 ± 0.010 (catalogue 0.164), 2.3% rms. The report is
+`reports/progress_2026-10-20.tex`.
+
+EXOTIC pitfalls found (worked around here; fixes belong in exotic-private):
+
+- `skybg_phot` returns the *mode* of a box (star included) around each
+  source. That's fine on integer ADU, but random on flat-fielded float data
+  (20–30% flux errors). `pipeline.wfi._for_exotic` rounds frames to whole
+  ADU.
+- `quick_fit.fit_transit` fits absolute BJD, so curve_fit's finite-difference
+  step on tmid is ~50 min and fits stall or half-converge.
+  `lightcurve.fit_with_airmass` fits times relative to the night, from a
+  grid start, with 4σ clipping. `python -m pipeline.refit RESULTS.json`
+  refits stored results.
+- Centroid fitting costs ~70 ms per source per frame. `pipeline.wfi`
+  splits sources across processes (`--workers`).
+
 ## Local setup
 
 Machine-specific details (compute host, environments, data locations,

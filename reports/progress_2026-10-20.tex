@@ -29,10 +29,15 @@ This report covers the first day of that work:
         \texttt{extract\_sequence} on every usable star in the field, fits
         the target's transit and writes all light curves to JSON.
   \item \textbf{Validation:} on the HAT-P-32\,b MicroObservatory night, the
-        fitted mid-transit time agrees with EXOTIC's own validation result
-        to within ${\sim}1.5\sigma$.
-  \item A wide-field ESO test night (POTS-1\,b, ESO/MPG \SI{2.2}{m} WFI) is
-        downloaded, calibrated and plate-solved. Extraction is running.
+        fitted mid-transit times agree with EXOTIC's own result to within
+        1--\SI{3}{min} ($0.7$--$2.1\sigma$).
+  \item \textbf{Wide-field recovery:} POTS-1\,b recovered in archival ESO/MPG
+        \SI{2.2}{m} WFI data, among 801 field stars on one detector:
+        $T_\mathrm{mid}$ within $4.7\pm\SI{4.0}{min}$ of the ephemeris and
+        $R_p/R_s=0.166\pm0.010$ (catalogue 0.164).
+  \item Two problems found in EXOTIC on the way: its sky-background
+        estimate fails on calibrated (floating-point) frames, and its quick
+        transit fit can stall at absolute BJD times (Section~\ref{sec:issues}).
 \end{itemize}
 
 \section{Data sources}
@@ -94,7 +99,10 @@ The aperture radius is set as a multiple of the stellar FWHM measured on
 the first frame. The target's relative light curve is its flux divided by
 the summed flux of the comparison stars. That curve is fitted with EXOTIC's
 least-squares \texttt{fit\_transit}, after dividing out a linear trend with
-airmass. The fit has three free parameters:
+airmass. Times are measured from the start of the night rather than as
+absolute BJD, the fit starts from a coarse grid search, and points more
+than $4\sigma$ from the model are clipped (Section~\ref{sec:issues}). The
+fit has three free parameters:
 \begin{itemize}
   \item the mid-transit time $T_\mathrm{mid}$;
   \item the radius ratio $R_p/R_s$, the planet's physical radius divided by
@@ -142,21 +150,22 @@ planet-to-star radius ratio from the fit; the literature value is 0.149.}
 \multicolumn{2}{c}{Photometric aperture radius} & Scatter & $T_\mathrm{mid}$ offset & Fitted $R_p/R_s$ \\
 ($\times$FWHM) & (px) & & (min) & (planet / star) \\
 \midrule
-1.0 & 2.5 & 0.53\% & $-0.6\pm2.6$ & $0.151\pm0.003$ \\
-1.4 & 3.5 & 0.48\% & $+2.1\pm2.4$ & $0.157\pm0.003$ \\
-1.9 & 4.7 & 0.57\% & $+4.0\pm2.8$ & $0.156\pm0.004$ \\
+1.0 & 2.5 & 0.53\% & $-3.1\pm1.5$ & $0.151\pm0.003$ \\
+1.4 & 3.5 & 0.48\% & $-1.9\pm1.4$ & $0.158\pm0.003$ \\
+1.9 & 4.7 & 0.57\% & $-1.1\pm1.6$ & $0.157\pm0.003$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Outcome.}
 \begin{itemize}
-  \item \textbf{Timing:} all three fitted mid-transit times agree with
-        EXOTIC's to within ${\sim}1.5\sigma$ (offsets of $-0.6$ to
-        $+4.0$\,min, with uncertainties of about \SI{2.5}{min}). The spread
-        between apertures is comparable to the uncertainties.
+  \item \textbf{Timing:} the three fitted mid-transit times are 1.1 to
+        \SI{3.1}{min} earlier than EXOTIC's, with uncertainties of about
+        \SI{1.5}{min} ($0.7$--$2.1\sigma$). Some offset is expected: EXOTIC
+        uses its own nested-sampling fit, different limb darkening and a
+        different detrending.
   \item \textbf{Depth:} the fitted planet-to-star radius ratio is 0.151 to
-        0.157, 1--5\% above the literature 0.149. The most likely cause is
+        0.158, 1--6\% above the literature 0.149. The most likely cause is
         the limb darkening, held at generic approximate coefficients rather
         than ones computed for HAT-P-32 in this filter. That changes the
         transit's shape, and with it the depth the fit needs. It has little
@@ -169,10 +178,10 @@ planet-to-star radius ratio from the fit; the literature value is 0.149.}
 \caption{HAT-P-32\,b relative light curve (grey points) with the fitted
 transit model (red), from the reduction with a photometric aperture radius
 of $1.4\times$FWHM (\SI{3.5}{px}). The x-axis is hours from the
-mid-transit time predicted by the published ephemeris. The fitted
-$T_\mathrm{mid}$ is \SI{5.7}{min} after that prediction and \SI{2.1}{min}
-after EXOTIC's result for this night; the fitted $R_p/R_s$ is 0.157
-(Table~\ref{tab:hatp32}).}
+mid-transit time predicted by the published ephemeris (grey dashed line);
+the red dotted line is the fitted $T_\mathrm{mid}$, \SI{1.75}{min} after
+that prediction and \SI{1.9}{min} before EXOTIC's result for this night.
+The fitted $R_p/R_s$ is 0.158 (Table~\ref{tab:hatp32}).}
 \label{fig:hatp32}
 \end{figure}
 
@@ -180,17 +189,16 @@ after EXOTIC's result for this night; the fitted $R_p/R_s$ is 0.157
 
 55 frames of \SI{60}{s}. Plate solving and frame alignment worked, but the
 target ($G=12.6$) is limited by sky noise: the best scatter is 2.3\% per
-point, with a photometric aperture radius of $1.0\times$FWHM. The transit is ${\sim}1.8\%$ deep,
-and a 66-minute gap leaves only 3 frames before ingress. The fit
-(Figure~\ref{fig:wasp36}) puts $T_\mathrm{mid}$ $+26\pm43$\,min from the
-ephemeris prediction and a planet-to-star radius ratio
-$R_p/R_s=0.09\pm0.06$ (literature 0.134). Both are consistent with
-expectations, but too uncertain to be useful. For comparison, the
-first reduction used the default photometric aperture radius of
-$1.9\times$FWHM (\SI{4.3}{px}). It gave 6.2\% scatter and
-$T_\mathrm{mid}$ $-7\pm65$\,min, $R_p/R_s=0.16\pm0.11$. Scatter fell
-steadily with smaller apertures, as expected for a faint star dominated
-by sky noise.
+point, with a photometric aperture radius of $1.0\times$FWHM (\SI{2.3}{px}).
+Scatter fell steadily with smaller apertures, as expected for a faint star
+dominated by sky noise (6.2\% at the default $1.9\times$FWHM). The transit
+is ${\sim}1.8\%$ deep. The fit (Figure~\ref{fig:wasp36}) gives
+$T_\mathrm{mid}$ $+15.4\pm\SI{6.3}{min}$ from the ephemeris prediction and
+$R_p/R_s=0.152\pm0.022$ (literature 0.134). Treat this as provisional. A
+66-minute gap leaves only 3 frames before ingress, so the out-of-transit
+level is set almost entirely after egress, and a timing offset of
+$2.4\sigma$ may well be systematic. With the default $1.9\times$FWHM
+aperture the fit gives $-30\pm\SI{27}{min}$ and $0.17\pm0.07$.
 
 \begin{figure}[ht]
 \centering
@@ -199,11 +207,11 @@ by sky noise.
 transit model (red), from the reduction with a photometric aperture radius
 of $1.0\times$FWHM (\SI{2.3}{px}). The dashed grey
 line is the predicted mid-transit time and the dotted red line the fitted
-one. The scatter is comparable to the transit depth.}
+one. Only three points precede the transit.}
 \label{fig:wasp36}
 \end{figure}
 
-\subsection{POTS-1\,b, WFI (in progress)}\label{sec:pots1}
+\subsection{POTS-1\,b, WFI}\label{sec:pots1}
 
 \begin{itemize}
   \item \textbf{Calibration:} gain and read noise were measured for each
@@ -261,10 +269,53 @@ was zero. Both problems are fixed in the re-run.}
 \label{fig:pots1first}
 \end{figure}
 
-\paragraph{Corrected extraction.} Re-running with both fixes, at photometric
-aperture radii of 1.2 and $1.9\times$FWHM. Results to follow.
+\paragraph{Corrected extraction.}
+Re-run with both fixes at two photometric aperture radii. Each run takes
+${\sim}\SI{30}{min}$ on 12 cores. Ephemeris and catalogue values are from
+the NASA Exoplanet Archive. Note that these WFI data are the survey in
+which POTS-1\,b was discovered, so this tests whether we recover a known
+result, not an independent detection.
 
-\section{Issues and next steps}
+\begin{table}[ht]
+\centering
+\caption{POTS-1\,b transit fits from WFI chip 3 (310 frames, 801 stars
+photometered) for two photometric aperture radii. \emph{$T_\mathrm{mid}$
+offset} is relative to the ephemeris prediction (uncertainty
+\SI{0.6}{min}). \emph{Fitted $R_p/R_s$} is the planet-to-star radius ratio;
+the catalogue value is 0.164. \emph{Scatter} is the rms of the fit
+residuals. \emph{Clipped} is the number of frames
+dropped as $>4\sigma$ outliers.}
+\label{tab:pots1}
+\begin{tabular}{cccccc}
+\toprule
+\multicolumn{2}{c}{Photometric aperture radius} & Scatter & $T_\mathrm{mid}$ offset & Fitted $R_p/R_s$ & Clipped \\
+($\times$FWHM) & (px) & & (min) & (planet / star) & \\
+\midrule
+1.2 & 6.4 & 2.3\% & $+4.7\pm4.0$ & $0.166\pm0.010$ & 2 \\
+1.9 & 10.1 & 4.1\% & $+5.8\pm7.6$ & $0.159\pm0.018$ & 3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both reductions recover the transit at the predicted time (within
+$1.2\sigma$) and with the catalogue depth (Table~\ref{tab:pots1},
+Figure~\ref{fig:pots1}). The smaller aperture halves the scatter, as for
+the faint MicroObservatory target. Frames between about +1 and +3\,h after
+mid-transit are noisier than the rest; the cause (transparency, or a
+neighbouring star) hasn't been checked yet.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figs/pots1.png}
+\caption{POTS-1\,b relative light curve from WFI chip 3 with a photometric
+aperture radius of $1.2\times$FWHM (\SI{6.4}{px}). Grey points are single
+\SI{26}{s} frames, blue points 5-frame bins, crosses frames clipped as
+$>4\sigma$ outliers. The red line is the transit fit. The grey dashed and
+red dotted lines mark the predicted and fitted mid-transit times.}
+\label{fig:pots1}
+\end{figure}
+
+\section{Issues and next steps}\label{sec:issues}
 
 \begin{itemize}
   \item \textbf{Speed:} centroid fitting in \texttt{extract\_frame} takes
@@ -278,13 +329,23 @@ aperture radii of 1.2 and $1.9\times$FWHM. Results to follow.
         EXOTIC: estimate the sky from the annulus pixels only, with a
         sigma-clipped median, so it works whatever the data type. EXOTIC's
         own pipeline is affected whenever it applies darks or flats.
+  \item \textbf{EXOTIC quick fit at absolute BJD:} \texttt{quick\_fit.fit\_transit}
+        passes BJD ($\sim2.45\times10^6$) straight to \texttt{curve\_fit},
+        whose finite-difference step scales with the parameter value. The
+        step on $T_\mathrm{mid}$ is then about \SI{50}{min}, wider than the
+        ingress. On the noisy POTS-1 data the fit stalled at its starting
+        values. On HAT-P-32 and WASP-36 it converged only partly and
+        overstated its uncertainties. Earlier numbers in this report have
+        been refitted. Fix used here: fit times relative to the start of
+        the night, from a grid-search start. It would be simple to do the
+        same inside \texttt{fit\_transit}.
   \item \textbf{Photometric aperture size:} the default FWHM-scaled aperture is too large
         for faint, sky-limited stars. It should be tuned per star, or chosen
         by sweeping, for bycatch at scale.
   \item \textbf{Limb darkening:} fixed approximate coefficients bias the
         fitted $R_p/R_s$. Timing is unaffected.
-  \item \textbf{Next:} finish POTS-1; run the remaining MicroObservatory
-        targets; look for variability among the field stars in the JSON
+  \item \textbf{Next:} check the noisy interval in the POTS-1 light curve;
+        run the remaining MicroObservatory targets; look for variability among the field stars in the JSON
         results; then scale the search to OmegaCAM and the other WFI
         sequences.
 \end{itemize}
