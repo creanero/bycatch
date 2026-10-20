@@ -1,0 +1,152 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{siunitx}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\setlist{itemsep=2pt,topsep=4pt}
+\sisetup{separate-uncertainty=true}
+
+\title{Astronomical Bycatch: progress report}
+\author{Huw Leggate}
+\date{20 October 2026}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+The aim is to get light curves for the stars in archival images using the
+new extraction API in our private EXOTIC fork (\texttt{exotic.extract}).
+This report covers the first day of that work:
+
+\begin{itemize}
+  \item Code to search and download raw data from the ESO Science Archive,
+        and to find archive sequences that cover a known transit.
+  \item A pipeline that plate-solves frames locally against Gaia DR3, runs
+        \texttt{extract\_sequence} on every usable star in the field, fits
+        the target's transit and writes all light curves to JSON.
+  \item \textbf{Validation:} on the HAT-P-32\,b MicroObservatory night, the
+        fitted mid-transit time agrees with EXOTIC's own validation result
+        to within ${\sim}1.5\sigma$.
+  \item A wide-field ESO test night (POTS-1\,b, ESO/MPG \SI{2.2}{m} WFI) is
+        downloaded, calibrated and plate-solved. Extraction is running.
+\end{itemize}
+
+\section{Data sources}
+
+\paragraph{ESO Science Archive (raw frames).}
+Metadata was queried through ESO's catalogue query service, and transiting
+planets through the NASA Exoplanet Archive. The two optical wide-field
+imagers, WFI and OmegaCAM, have 182 long single-pointing sequences between
+them (at least 40 frames over at least 2 hours). Only one catches a known
+transit: \textbf{POTS-1\,b, WFI, night of 2007-05-10}. It has 310 Rc-band
+frames of \SI{26}{s} over \SI{8.2}{h}, covering the full transit with
+${\sim}\SI{2.5}{h}$ of data before and \SI{2.8}{h} after. The night has 24
+biases, 4 twilight flats and 10 screen flats; the night is \SI{46}{GB}
+decompressed. POTS-1 is faint ($G=17.3$) but its transit is deep, and the
+field is crowded with background stars.
+
+\paragraph{MicroObservatory frames.}
+A collaborator's repository of raw MicroObservatory frames covering seven
+hot-Jupiter targets. The HAT-P-32 night is byte-identical to EXOTIC's own
+sample data, which makes it a direct check against EXOTIC.
+
+\section{Code and storage}
+
+\begin{description}
+  \item[\texttt{access/}] Searches the ESO archive, matches sequences to
+        known transits, and downloads a target's frames and calibrations
+        (\texttt{python -m access.fetch targets/<t>.json}). Downloads can be
+        restarted. Each target is a small JSON file in \texttt{targets/}.
+  \item[\texttt{pipeline/astrometry.py}] Local plate solving against Gaia
+        DR3, so no image is uploaded to an external service. Raw WFI and
+        MicroObservatory frames carry no sky coordinates, and the
+        MicroObservatory header pointing can be ${\sim}0.3^\circ$ off.
+  \item[\texttt{pipeline/microobs.py}, \texttt{pipeline/wfi.py}] Pipelines
+        for each instrument. WFI handles 8 detectors per frame: overscan
+        trimming, master bias and flat, and a separate plate solve per
+        detector.
+  \item[\texttt{pipeline/store.py}] JSON results, one file per sequence (and
+        per detector). Each holds the observation details, per-frame
+        times and airmass, and a light curve for every star keyed by Gaia DR3
+        ID. The layout maps onto the existing kdb+ schema
+        (\texttt{sources}, \texttt{obs\_sessions}, \texttt{observations}).
+\end{description}
+
+Data and results stay on the department compute server; nothing large is
+kept on laptops. Code is on the \texttt{huw-leggate/claude-md} branch of
+\texttt{creanero/bycatch}.
+
+\section{Results}
+
+\subsection{HAT-P-32\,b: validation}
+
+142 frames of \SI{60}{s}. The plate solve matched 184 Gaia stars to
+\SI{1.5}{arcsec}, and 83 stars were photometered. The fit uses EXOTIC's
+\texttt{fit\_transit} (least squares) with a linear airmass trend removed.
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Aperture & Radius (px) & Scatter & $T_\mathrm{mid}-$ EXOTIC result (min) & $R_p/R_s$ \\
+\midrule
+$1.0\times$FWHM & 2.5 & 0.53\% & $-0.6\pm2.6$ & $0.151\pm0.003$ \\
+$1.4\times$FWHM & 3.5 & 0.48\% & $+2.1\pm2.4$ & $0.157\pm0.003$ \\
+$1.9\times$FWHM & 4.7 & 0.57\% & $+4.0\pm2.8$ & $0.156\pm0.004$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+EXOTIC's result for this night is $T_\mathrm{mid}=2458107.71380$\,BJD$_\mathrm{TDB}$
+and the published $R_p/R_s$ is 0.149. Our $R_p/R_s$ runs slightly high,
+probably because of the fixed, approximate limb darkening.
+
+\begin{center}
+\includegraphics[width=0.8\textwidth]{figs/hatp32.png}
+\end{center}
+
+\subsection{WASP-36\,b}
+
+55 frames of \SI{60}{s}. Plate solving and frame alignment worked, but the
+target ($G=12.6$) is sky-noise limited: scatter is 2.3\% per point at best
+(aperture $1.0\times$FWHM). The transit is ${\sim}1.8\%$ deep, and a
+66-minute gap leaves only 3 frames before ingress. The fit is consistent
+with the prediction ($+26\pm43$\,min) but not useful for timing.
+
+\subsection{POTS-1\,b, WFI (in progress)}
+
+\begin{itemize}
+  \item \textbf{Calibration:} gain and read noise were measured for each
+        detector from bias and flat pairs, because the headers record gain
+        for only two detectors and read noise for none. Gain came out at
+        1.94--\SI{2.28}{e^-/ADU} and read noise at 5.6--\SI{6.2}{e^-},
+        consistent with WFI's documented values.
+  \item \textbf{Astrometry:} all 8 detectors plate-solved, with 36--163
+        Gaia stars each and residuals of 0.06--\SI{0.11}{arcsec}. POTS-1 is
+        on chip 3.
+  \item \textbf{Extraction:} 801 stars down to $G=18.5$ across all 310
+        frames, split over 16 processes. Results to follow.
+\end{itemize}
+
+\section{Issues and next steps}
+
+\begin{itemize}
+  \item \textbf{Speed:} centroid fitting in \texttt{extract\_frame} takes
+        ${\sim}\SI{70}{ms}$ per star per frame, which dominates run time
+        (about \SI{55}{s} per WFI frame for 800 stars). Running in parallel
+        works around it for now. This is a useful benchmark for the GPU
+        work in EXOTIC.
+  \item \textbf{Aperture size:} the default FWHM-scaled aperture is too large
+        for faint, sky-limited stars. It should be tuned per star, or chosen
+        by sweeping, for bycatch at scale.
+  \item \textbf{Limb darkening:} fixed approximate coefficients bias the
+        fitted $R_p/R_s$. Timing is unaffected.
+  \item \textbf{Next:} finish POTS-1; run the remaining MicroObservatory
+        targets; look for variability among the field stars in the JSON
+        results; then scale the search to OmegaCAM and the other WFI
+        sequences.
+\end{itemize}
+
+\end{document}
