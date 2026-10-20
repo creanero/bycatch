@@ -213,6 +213,38 @@ cloned: `CLAUDE.local.md`.
   `<root>/eso/wfi/54230_OTSF-1A/`: 310 science + 38 calibration frames,
   ~50 GB uncompressed.
 
+## Pipeline code (`pipeline/`)
+
+- `pipeline/astrometry.py`: local plate solving against Gaia DR3 (DAOStarFinder
+  detections + astroalign pattern match + `fit_wcs_from_points` with SIP).
+  `solve_wcs_robust` tries several centres and settings. Needed because raw
+  WFI and MicroObservatory frames have no WCS, and MicroObservatory header
+  pointing can be ~0.3 deg off.
+- `pipeline/store.py`: JSON results store, schema `bycatch-lightcurves/1`
+  (sequence metadata, per-frame times/airmass, per-source light curves
+  keyed by Gaia DR3 ID, analysis).
+- `pipeline/microobs.py`: MicroObservatory night → solve → Gaia sources →
+  `extract_sequence` → comparison ensemble → `fit_transit` with airmass
+  detrending → JSON + PNG. `python -m pipeline.microobs FRAMES_DIR --inits
+  INITS.json --out OUT.json [--plot OUT.png] [--aperture-coeff C]`. Needs
+  EXOTIC on `PYTHONPATH`.
+
+First run, WASP-36 b (MicroObservatory, 2026-01-05, 55 × 60 s):
+
+- Solve: 91 Gaia stars, 0.94" RMS, 5.237"/px. Tracking holds: target vs.
+  comparison offset scatter <0.6 px across ~70 px of drift.
+- EXOTIC's JD from the header equals the DATE-OBS-derived mid-exposure JD
+  exactly on these frames, so there's no MJD-OBS rounding problem here.
+- Noise-limited: per-point scatter goes from 1.6% at G≈11 to 6% at the target
+  (G=12.6) with the default aperture (1.9 × FWHM). A sweep over
+  `--aperture-coeff` 1.0–1.9 gives monotonically lower scatter for smaller
+  apertures: 2.3% at 1.0 × FWHM (2.3 px). That suggests sky-dominated noise,
+  and is worth checking against the background estimate.
+- Transit (~1.8% deep) only weakly detected. Best fit (1.0 × FWHM): O−C
+  +26 ± 43 min, Rp/Rs 0.09 ± 0.06, vs. predicted T_mid 2461045.9342 ±
+  0.4 min. A 66 min gap leaves only 3 frames of pre-ingress baseline, and
+  there are no flats or darks.
+
 ## Local setup
 
 Machine-specific details (compute host, environments, data locations,
