@@ -17,6 +17,7 @@ keyed by Gaia ``source_id``.
 """
 
 import logging
+import time
 
 import astroalign as aa
 import numpy as np
@@ -39,7 +40,14 @@ def gaia_stars(ra, dec, radius_deg, g_max):
         WHERE 1 = CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra}, {dec}, {radius_deg}))
         AND phot_g_mean_mag < {g_max}
         ORDER BY phot_g_mean_mag"""
-    return Gaia.launch_job_async(query).get_results()
+    for attempt in range(5):
+        try:
+            return Gaia.launch_job_async(query).get_results()
+        except Exception as exc:  # the archive returns transient HTTP 500s
+            if attempt == 4:
+                raise
+            log.warning("Gaia query failed (%s); retrying in %d s", exc, 30 * (attempt + 1))
+            time.sleep(30 * (attempt + 1))
 
 
 def detect_stars(data, fwhm=3.0, n_max=200, threshold_sigma=5.0):

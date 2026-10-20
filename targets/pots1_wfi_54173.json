@@ -1,0 +1,16 @@
+{
+  "name": "POTS-1 b, WFI, night of 2007-03-14",
+  "purpose": "Second POTS-1 b transit, 57 nights before the 54230 test night: a period check with the same field and pipeline.",
+  "archive": "ESO",
+  "instrument": "WFI",
+  "prog_id": "078.A-9057(A)",
+  "object": "OTSF-1A",
+  "filter": "BB#RC/162_ESO844",
+  "night": 54173,
+  "known_planets": ["POTS-1 b"],
+  "calibrations": {
+    "BIAS": false,
+    "FLAT,SKY": true,
+    "FLAT,SCREEN": true
+  }
+}

@@ -248,18 +248,37 @@ def chip_containing(seq_dir, coord, margin_px=30):
 
 # --- extraction and fit ------------------------------------------------------------------
 
-def planet_parameters(name, bjd_mid):
-    """Orbit and ephemeris from the NASA Exoplanet Archive, projected to this night."""
+PLANET_CACHE = Path("~/bycatch-data/cache/planets").expanduser()
+PLANET_COLUMNS = ("ra", "dec", "pl_orbper", "pl_orbpererr1", "pl_tranmid", "pl_tranmiderr1", "pl_ratror",
+                  "pl_ratdor", "pl_orbsmax", "st_rad", "pl_orbincl", "pl_orbeccen", "pl_orblper", "sy_gaiamag")
+
+
+def _planet_row(name):
+    """The archive row for a planet as a dict, cached on disk; the cache is used when the archive is down."""
     import pyvo
 
-    row = pyvo.dal.TAPService("https://exoplanetarchive.ipac.caltech.edu/TAP").search(
-        "SELECT pl_name, ra, dec, pl_orbper, pl_orbpererr1, pl_tranmid, pl_tranmiderr1, pl_ratror, pl_ratdor, "
-        "pl_orbsmax, st_rad, pl_orbincl, pl_orbeccen, pl_orblper, sy_gaiamag "
-        f"FROM pscomppars WHERE pl_name='{name}'").to_table()[0]
+    cache = PLANET_CACHE / f"{name.replace(' ', '_')}.json"
+    try:
+        table = pyvo.dal.TAPService("https://exoplanetarchive.ipac.caltech.edu/TAP").search(
+            f"SELECT {', '.join(PLANET_COLUMNS)} FROM pscomppars WHERE pl_name='{name}'").to_table()
+        row = {k: (None if np.ma.is_masked(table[k][0]) else float(table[k][0])) for k in PLANET_COLUMNS}
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(row, indent=2) + "\n")
+        return row, "NASA Exoplanet Archive pscomppars"
+    except Exception as exc:
+        if not cache.exists():
+            raise
+        log.warning("NASA Exoplanet Archive query failed (%s); using cached %s", exc, cache)
+        return json.loads(cache.read_text()), f"cached NASA Exoplanet Archive values ({cache.name})"
+
+
+def planet_parameters(name, bjd_mid):
+    """Orbit and ephemeris from the NASA Exoplanet Archive, projected to this night."""
+    row, source = _planet_row(name)
 
     def val(key, default=0.0):
-        v = row[key]
-        return default if np.ma.is_masked(v) or not np.isfinite(v) else float(v)
+        v = row.get(key)
+        return default if v is None or not np.isfinite(v) else float(v)
 
     per, t0 = val("pl_orbper"), val("pl_tranmid")
     ars = val("pl_ratdor", np.nan)
@@ -270,7 +289,7 @@ def planet_parameters(name, bjd_mid):
     return {"name": name, "ra": val("ra"), "dec": val("dec"), "per": per, "ars": ars,
             "inc": val("pl_orbincl", 90.0), "ecc": val("pl_orbeccen"), "omega": val("pl_orblper"),
             "rprs": val("pl_ratror", 0.1), "t0_published": t0, "epoch": epoch, "tmid_predicted": t0 + epoch * per,
-            "tmid_predicted_sigma_min": float(sigma * 1440), "source": "NASA Exoplanet Archive pscomppars"}
+            "tmid_predicted_sigma_min": float(sigma * 1440), "source": source}
 
 
 def _for_exotic(image):
