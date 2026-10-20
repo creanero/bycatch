@@ -1,0 +1,17 @@
+{
+  "name": "WASP-4 b, EFOSC2, night of 2011-10-21",
+  "purpose": "Timing validation on a planet with a very precise ephemeris (predicted T_mid +-0.02 min). Full transit in the 124 x 150 s sequence.",
+  "archive": "ESO",
+  "instrument": "EFOSC",
+  "object": "WASP-4",
+  "filter": "R#784",
+  "night": 55855,
+  "known_planets": [
+    "WASP-4 b"
+  ],
+  "calibrations": {
+    "BIAS": false,
+    "SKY,FLAT": true
+  },
+  "exposure": 150.0
+}

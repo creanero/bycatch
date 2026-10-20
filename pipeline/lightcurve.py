@@ -76,8 +76,10 @@ def pick_comparisons(flux, target_flux, n_max=8, ratio_range=(0.3, 5.0)):
     med = np.nanmedian(flux, axis=0)
     ok = np.all(np.isfinite(flux), axis=0) & (med > ratio_range[0] * median_t) & (med < ratio_range[1] * median_t)
     chosen = list(np.nonzero(ok)[0])
-    if len(chosen) < 2:
-        raise RuntimeError("fewer than two usable comparison stars")
+    if not chosen:
+        raise RuntimeError("no usable comparison star")
+    if len(chosen) == 1:  # small fields (e.g. windowed EFOSC2): one comparison, scatter not measurable
+        return chosen, {int(chosen[0]): float("nan")}
 
     def scatter(j, others):
         ratio = flux[:, j] / flux[:, others].sum(axis=1)

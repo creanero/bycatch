@@ -18,6 +18,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
+
 from . import eso
 
 MANIFEST_COLUMNS = ("dp_id", "dp_cat", "dp_type", "filter_path", "exposure", "mjd_obs", "ra", "dec",
@@ -36,6 +38,8 @@ def resolve(target):
         raise ValueError(f"unsupported archive {target['archive']!r}")
     science = eso.sequence_frames(target["instrument"], target["object"], target["night"],
                                   filter_path=target.get("filter"), prog_id=target.get("prog_id"))
+    if target.get("exposure") is not None:  # e.g. drop acquisition frames taken before the sequence
+        science = science[np.abs(science["exposure"] - float(target["exposure"])) < 0.5]
     wanted = {dp_type: (target.get("filter") if same_filter else None)
               for dp_type, same_filter in target.get("calibrations", {}).items()}
     calib = eso.night_calibrations(target["instrument"], target["night"], wanted)
