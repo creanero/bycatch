@@ -297,9 +297,9 @@ an hour, and Gaia gave intermittent 500s. Planet rows are cached in
 `~/bycatch-data/cache/planets/`; Gaia queries retry.
 
 EXOTIC pitfalls found here, now fixed in exotic-private `main` (801067c).
-The bycatch workarounds are removed, and cheetah's exotic copy is at b06f311
-(main plus the grid fix on `huw-leggate/batched-grid-photometry`). Make sure
-any exotic copy includes 801067c.
+The bycatch workarounds are removed. The batched grid fix is also on `main`
+(0cba1cc), and the compute host runs a git clone of `main` (see
+`CLAUDE.local.md`). Make sure any exotic copy includes 801067c.
 
 - `skybg_phot` used to take the *mode* of a box around each source, which
   on flat-fielded float data is the smallest pixel (20–30% flux errors).
