@@ -288,8 +288,8 @@ O−C +0.19 ± 0.29 min against a ±0.02 min prediction; Rp/Rs 0.1518 ±
 - Sky flats are `SKY,FLAT`, not WFI's `FLAT,SKY`.
 - Acquisition frames mixed in, so the target file uses `"exposure"`.
 
-Wider ESO search (7 instruments, cached under `~/bycatch-data/search/` on
-cheetah): 92 sequence/transit matches for 41 planets. Mostly target-centred;
+Wider ESO search (7 instruments, cached under `~/bycatch-data/search/` on the
+compute host): 92 sequence/transit matches for 41 planets. Mostly target-centred;
 OGLE-TR fields (FORS1/2, SOFI) are the crowded, bycatch-like ones.
 
 Archive outages seen: the NASA Exoplanet Archive returned HTTP 526 for over
