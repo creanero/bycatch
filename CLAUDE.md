@@ -327,7 +327,20 @@ Blind searches (no knowledge of the target):
 - 126 stars excluded as variable. 33 have a Gaia DR3 class (19 ECL, 6
   DSCT/GDOR, 5 RS, 1 RR, among others). The other 93 are unclassified:
   possible new variable-star bycatch.
-- Weaknesses to fix:
+- Re-run with tightened vetting (`5676fe6`; results in `pots_field/v2/`):
+  - 72 strictly vetted candidates (was 186); 192 variables excluded, 67
+    with a Gaia DR3 class (was 33). POTS-1 is still #1, with SNR excess
+    13.8 over its chip's typical SNR.
+  - Next candidates, all worth testing with more nights: chip 6 G=17.0
+    (likely low-level variability); chip 2 G=14.8 (5851641466227710208,
+    0.69%); chip 1 G=16.9 (5851639404643287040, 1.2%); chip 8 G=15.7
+    (5851604082828715904, 1.3%). Below them the list drops to SNR excess
+    < 5.
+  - The archive has 26 WFI nights of OTSF-1A (Feb 2007 – Jan 2008, ~4,000
+    frames, ~240 GB compressed) plus 2 of the offset pointing OTSF-1AC.
+    That's enough to give unique periods.
+- Weaknesses found in the first field run (fixed by the re-run above
+  except the 0.7 d pile-up):
   - "Complete" events should need ≥30 min of data on both sides (the #4
     candidate's event starts at the night's first frame).
   - Two Gaia LPVs slipped past the variable flag.
