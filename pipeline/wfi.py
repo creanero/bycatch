@@ -329,17 +329,20 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
     reference, _, primary = calibrated_chip(files[0], ext, bias, flat)
     obs = site(primary)
 
-    t_mid_guess = float(primary["MJD-OBS"]) + 2400000.5
-    planet = planet_parameters(planet_name, t_mid_guess)
-    target = SkyCoord(planet["ra"] * u.deg, planet["dec"] * u.deg)
-
     ny, nx = reference.shape
     centre = wcs.pixel_to_world(nx / 2, ny / 2)
+    if planet_name:
+        planet = planet_parameters(planet_name, float(primary["MJD-OBS"]) + 2400000.5)
+        target = SkyCoord(planet["ra"] * u.deg, planet["dec"] * u.deg)
+    else:  # field only: every star, no target, no transit fit
+        planet, target = None, None
+    field_ra, field_dec = (target.ra.deg, target.dec.deg) if target is not None else (centre.ra.deg, centre.dec.deg)
     gaia = gaia_stars(centre.ra.deg, centre.dec.deg, np.hypot(nx, ny) / 2 * PIXEL_SCALE / 3600 * 1.02, g_max + 2.5)
     picked = choose_sources(np.nan_to_num(reference), wcs, gaia, target, g_max, edge_px=30,
                             blend_px=4.0 / PIXEL_SCALE, saturation=SATURATION, max_sources=max_sources)
     gaia = gaia[picked]
-    log.info("chip %d: photometering %d sources (target G=%.2f)", chip, len(gaia), gaia["phot_g_mean_mag"][0])
+    log.info("chip %d: photometering %d sources%s", chip, len(gaia),
+             f" (target G={gaia['phot_g_mean_mag'][0]:.2f})" if target is not None else " (field only)")
 
     # Radii are fixed once here, on the whole source list, so every worker uses the same ones.
     apertures = FwhmScaled() if aperture_coeff is None else FwhmScaled(aperture_coeff=aperture_coeff)
@@ -353,7 +356,7 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
     chunks = [sky_positions[i::workers] for i in range(workers)]
     order = np.concatenate([np.arange(len(sky_positions))[i::workers] for i in range(workers)])
     job = dict(seq_dir=str(seq_dir), chip=chip, files=[str(f) for f in files], wcs_header=wcs.to_header(relax=True),
-               ra=target.ra.deg, dec=target.dec.deg, observatory=obs, apertures=radii,
+               ra=field_ra, dec=field_dec, observatory=obs, apertures=radii,
                gain=detector["gain_e_per_adu"], read_noise=detector["read_noise_e"])
     with ProcessPoolExecutor(max_workers=workers) as pool:
         parts = list(pool.map(_extract_chunk, [dict(job, sky_positions=c) for c in chunks if c]))
@@ -362,24 +365,17 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
     bjd, airmass = grid["bjd_tdb"][:, 0], grid["airmass"][:, 0]
     aligned = grid["aligned"].all(axis=1)
 
-    good = aligned & np.isfinite(flux[:, 0]) & (flux[:, 0] > 0)
-    comps, comp_scatter = pick_comparisons(flux[good][:, 1:], flux[good][:, 0], n_max=15, ratio_range=(0.5, 5.0))
-    comps = [c + 1 for c in comps]
-    relative = flux[:, 0] / flux[:, comps].sum(axis=1)
-    relative = relative / np.nanmedian(relative[good])
-    values, errors, extra = fit_with_airmass(bjd[good], relative[good], airmass[good], planet)
-    fit = {"tmid_bjd": values["tmid"], "tmid_err_min": errors["tmid"] * 1440, "rprs": values["rprs"],
-           "rprs_err": errors["rprs"], "scale": values["scale"],
-           "o_minus_c_min": (values["tmid"] - planet["tmid_predicted"]) * 1440,
-           "airmass_poly": extra["airmass_poly"], "residual_rms": extra["rms"]}
-    log.info("fit: T_mid %.5f +- %.2f min, O-C %+.2f min, Rp/Rs %.3f +- %.3f, rms %.4f", fit["tmid_bjd"],
-             fit["tmid_err_min"], fit["o_minus_c_min"], fit["rprs"], fit["rprs_err"], fit["residual_rms"])
+    if planet is None:
+        good = aligned
+        sources = [{"gaia_dr3": int(gaia["source_id"][j]), "g_mag": float(gaia["phot_g_mean_mag"][j]),
+                    "ra": float(gaia["ra"][j]), "dec": float(gaia["dec"][j]), "role": "field",
+                    "flux": grid["flux"][:, j], "uncertainty": grid["uncertainty"][:, j],
+                    "x": grid["x_centroid"][:, j], "y": grid["y_centroid"][:, j]} for j in range(len(gaia))]
+        analysis = {}
+        log.info("chip %d: %d frames aligned; no target, so no transit fit", chip, int(good.sum()))
+    else:
+        sources, analysis, good, extra, fit = _target_analysis(grid, gaia, planet, aligned)
 
-    roles = ["target"] + ["comparison" if j in comps else "field" for j in range(1, len(gaia))]
-    sources = [{"gaia_dr3": int(gaia["source_id"][j]), "g_mag": float(gaia["phot_g_mean_mag"][j]),
-                "ra": float(gaia["ra"][j]), "dec": float(gaia["dec"][j]), "role": roles[j],
-                "flux": grid["flux"][:, j], "uncertainty": grid["uncertainty"][:, j],
-                "x": grid["x_centroid"][:, j], "y": grid["y_centroid"][:, j]} for j in range(len(gaia))]
     manifest = json.loads((seq_dir / "manifest.json").read_text())
     sequence = {"archive": "ESO", "instrument": "WFI", "chip": chip, "object": primary.get("OBJECT"),
                 "filter": primary.get("HIERARCH ESO INS FILT1 NAME"), "exposure_s": float(primary["EXPTIME"]),
@@ -393,34 +389,62 @@ def extract(seq_dir, chip, planet_name, out_path, plot_path=None, g_max=18.5, ma
                 "g_max": g_max, "limb_darkening": LIMB_DARKENING}
     frames_out = {"bjd_tdb": bjd, "jd_utc": grid["jd_utc"][:, 0], "airmass": airmass, "aligned": aligned,
                   "used": good}
+    store.write(out_path, sequence, frames_out, sources, analysis)
+    log.info("wrote %s", out_path)
+    if plot_path and planet is not None:
+        _plot_target(plot_path, bjd, good, planet, extra, fit, chip)
+    return out_path
+
+
+def _target_analysis(grid, gaia, planet, aligned):
+    """Comparison ensemble, relative light curve and transit fit for the target (source 0)."""
+    flux = grid["flux"]
+    bjd, airmass = grid["bjd_tdb"][:, 0], grid["airmass"][:, 0]
+    good = aligned & np.isfinite(flux[:, 0]) & (flux[:, 0] > 0)
+    comps, comp_scatter = pick_comparisons(flux[good][:, 1:], flux[good][:, 0], n_max=15, ratio_range=(0.5, 5.0))
+    comps = [c + 1 for c in comps]
+    relative = flux[:, 0] / flux[:, comps].sum(axis=1)
+    relative = relative / np.nanmedian(relative[good])
+    values, errors, extra = fit_with_airmass(bjd[good], relative[good], airmass[good], planet)
+    fit = {"tmid_bjd": values["tmid"], "tmid_err_min": errors["tmid"] * 1440, "rprs": values["rprs"],
+           "rprs_err": errors["rprs"], "scale": values["scale"],
+           "o_minus_c_min": (values["tmid"] - planet["tmid_predicted"]) * 1440,
+           "airmass_poly": extra["airmass_poly"], "residual_rms": extra["rms"]}
+    log.info("fit: T_mid %.5f +- %.2f min, O-C %+.2f min, Rp/Rs %.3f +- %.3f, rms %.4f", fit["tmid_bjd"],
+             fit["tmid_err_min"], fit["o_minus_c_min"], fit["rprs"], fit["rprs_err"], fit["residual_rms"])
+    roles = ["target"] + ["comparison" if j in comps else "field" for j in range(1, len(gaia))]
+    sources = [{"gaia_dr3": int(gaia["source_id"][j]), "g_mag": float(gaia["phot_g_mean_mag"][j]),
+                "ra": float(gaia["ra"][j]), "dec": float(gaia["dec"][j]), "role": roles[j],
+                "flux": grid["flux"][:, j], "uncertainty": grid["uncertainty"][:, j],
+                "x": grid["x_centroid"][:, j], "y": grid["y_centroid"][:, j]} for j in range(len(gaia))]
     analysis = {"planet": planet, "comparisons": {"gaia_dr3": [int(gaia["source_id"][c]) for c in comps],
                                                   "point_to_point_scatter": list(comp_scatter.values())},
                 "relative_flux": relative, "transit_fit": fit}
-    store.write(out_path, sequence, frames_out, sources, analysis)
-    log.info("wrote %s", out_path)
+    return sources, analysis, good, extra, fit
 
-    if plot_path:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        t = (bjd[good] - planet["tmid_predicted"]) * 24
-        order = np.argsort(t)
-        fig, ax = plt.subplots(figsize=(8, 4.5))
-        ax.plot(t, extra["detrended"], ".", color="0.4", ms=4, label="target / comparison ensemble, detrended")
-        nbin = 5
-        nb = len(t) // nbin * nbin
-        ax.plot(t[order][:nb].reshape(-1, nbin).mean(1), extra["detrended"][order][:nb].reshape(-1, nbin).mean(1),
-                "o", color="C0", ms=5, label=f"binned x{nbin}")
-        ax.plot(t[order], extra["model"][order], "-", color="C3", label="fit_transit")
-        ax.axvline(0, color="0.6", ls="--", lw=1, label="predicted T_mid")
-        ax.set_xlabel("hours from predicted mid-transit")
-        ax.set_ylabel("relative flux")
-        ax.set_title(f"{planet['name']} (WFI chip {chip}): T_mid {fit['tmid_bjd']:.5f} ± {fit['tmid_err_min']:.1f} min, "
-                     f"O-C {fit['o_minus_c_min']:+.1f} min, Rp/Rs {fit['rprs']:.3f}", fontsize=10)
-        ax.legend(fontsize=8)
-        fig.tight_layout()
-        fig.savefig(plot_path, dpi=120)
-    return out_path
+
+def _plot_target(plot_path, bjd, good, planet, extra, fit, chip):
+    """The target's detrended light curve with the transit fit."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    t = (bjd[good] - planet["tmid_predicted"]) * 24
+    order = np.argsort(t)
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(t, extra["detrended"], ".", color="0.4", ms=4, label="target / comparison ensemble, detrended")
+    nbin = 5
+    nb = len(t) // nbin * nbin
+    ax.plot(t[order][:nb].reshape(-1, nbin).mean(1), extra["detrended"][order][:nb].reshape(-1, nbin).mean(1),
+            "o", color="C0", ms=5, label=f"binned x{nbin}")
+    ax.plot(t[order], extra["model"][order], "-", color="C3", label="fit_transit")
+    ax.axvline(0, color="0.6", ls="--", lw=1, label="predicted T_mid")
+    ax.set_xlabel("hours from predicted mid-transit")
+    ax.set_ylabel("relative flux")
+    ax.set_title(f"{planet['name']} (WFI chip {chip}): T_mid {fit['tmid_bjd']:.5f} ± {fit['tmid_err_min']:.1f} min, "
+                 f"O-C {fit['o_minus_c_min']:+.1f} min, Rp/Rs {fit['rprs']:.3f}", fontsize=10)
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(plot_path, dpi=120)
 
 
 def main():
@@ -431,7 +455,8 @@ def main():
         p.add_argument("seq_dir")
         if name == "extract":
             p.add_argument("--chip", type=int, help="chip number; default: the chip containing the planet's host")
-            p.add_argument("--planet", required=True, help="NASA Exoplanet Archive pl_name, e.g. 'POTS-1 b'")
+            p.add_argument("--planet", help="NASA Exoplanet Archive pl_name, e.g. 'POTS-1 b'; "
+                                            "omit (with --chip) for every star and no transit fit")
             p.add_argument("--out", required=True)
             p.add_argument("--plot")
             p.add_argument("--g-max", type=float, default=18.5)
@@ -446,6 +471,8 @@ def main():
         solve(args.seq_dir)
     else:
         chip = args.chip
+        if chip is None and not args.planet:
+            raise SystemExit("give --chip, --planet or both")
         if chip is None:
             primary = fits.getheader(science_files(args.seq_dir)[0], 0)
             planet = planet_parameters(args.planet, float(primary["MJD-OBS"]) + 2400000.5)
