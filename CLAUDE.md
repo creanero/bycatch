@@ -311,9 +311,9 @@ Blind searches (no knowledge of the target):
   The period is ambiguous with two nights. The catalogue 3.16066 d is
   among 76 aliases of the 56.894 d gap.
 
-**Whole POTS-1 field, both nights** (22 Oct 2026, overnight on cheetah):
+**Whole POTS-1 field, both nights** (22 Oct 2026, overnight on the compute host):
 
-- Run with `run_pots_field.sh` on cheetah. Field-only `pipeline.wfi
+- Run with `scripts/run_pots_field.sh` on the compute host. Field-only `pipeline.wfi
   extract --chip N` for the 7 other chips, about 11 min per chip on the
   short night and 21 min on the long one, with 16 workers. Then
   `periodsearch` per chip and `pipeline.collate`. Results are under
