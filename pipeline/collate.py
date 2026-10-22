@@ -6,7 +6,9 @@ Usage
 
 Each ``SEARCH_DIR`` holds the ``candidates.json`` written by
 ``pipeline.periodsearch`` for one chip. Candidates are ranked across all
-chips the same way (strictly vetted first, then vetted, then by SNR), and
+chips the same way: strictly vetted first, then vetted, then by SNR excess
+over their own chip's typical SNR (robust z-score), so a noisier chip
+doesn't crowd the top. Then
 each candidate and excluded variable is matched against Gaia DR3's
 variability classification (``gaiadr3.vari_classifier_result``), so stars
 Gaia already knows as eclipsing binaries or other variables are labelled.
@@ -17,6 +19,8 @@ import json
 import logging
 import time
 from pathlib import Path
+
+import numpy as np
 
 log = logging.getLogger("pipeline.collate")
 
@@ -64,7 +68,14 @@ def collate(search_dirs, out_path, top=25):
     known = gaia_variability([c["gaia_dr3"] for c in candidates] + [v["gaia_dr3"] for v in variables])
     for c in candidates + variables:
         c["gaia_variability"] = known.get(int(c["gaia_dr3"]))
-    candidates.sort(key=lambda c: (not c.get("vetted_strict"), not c.get("vetted"), -c["snr"]))
+    # SNR relative to its own chip's distribution, so a noisier chip doesn't crowd the top.
+    for chip in {c["chip"] for c in candidates}:
+        snrs = np.array([c["snr"] for c in candidates if c["chip"] == chip])
+        med, mad = np.median(snrs), 1.4826 * np.median(np.abs(snrs - np.median(snrs)))
+        for c in candidates:
+            if c["chip"] == chip:
+                c["snr_excess"] = float((c["snr"] - med) / mad) if mad > 0 else float("nan")
+    candidates.sort(key=lambda c: (not c.get("vetted_strict"), not c.get("vetted"), -c["snr_excess"]))
     for rank, c in enumerate(candidates, 1):
         c["field_rank"] = rank
 
@@ -76,9 +87,9 @@ def collate(search_dirs, out_path, top=25):
              sum(v["gaia_variability"] is not None for v in variables))
     for c in candidates[:top]:
         vari = f"{c['gaia_variability'][0]} ({c['gaia_variability'][1]:.2f})" if c["gaia_variability"] else "-"
-        log.info("#%-3d %-12s %s G=%5.2f %-6s SNR %5.1f  P %8.5f d  depth %5.2f%%  dur %.1f h  Gaia var %s  %d",
+        log.info("#%-3d %-12s %s G=%5.2f %-6s SNR %5.1f (excess %5.1f)  P %8.5f d  depth %5.2f%%  dur %.1f h  Gaia var %s  %d",
                  c["field_rank"], c["chip"], "S" if c.get("vetted_strict") else ("V" if c.get("vetted") else " "),
-                 c["g_mag"], c["role"], c["snr"], c["period"], 100 * c["depth"], c["duration_h"], vari,
+                 c["g_mag"], c["role"], c["snr"], c["snr_excess"], c["period"], 100 * c["depth"], c["duration_h"], vari,
                  c["gaia_dr3"])
     for v in variables:
         if v["gaia_variability"]:

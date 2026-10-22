@@ -132,8 +132,9 @@ def prepare_night(path):
 
     Returns ``(t, rows)``: the used frames' BJD_TDB and, per star, a dict
     with its identity, ``detrended`` flux (normalised to 1, NaN where
-    clipped), frame-to-frame ``scatter`` and ``variability`` (robust spread
-    over that scatter).
+    clipped), frame-to-frame ``scatter``, ``variability`` (robust spread
+    over that scatter) and ``level`` (median brightness relative to the
+    reference stars, for comparing nights).
     """
     data = store.read(path)
     frames, sources = data["frames"], data["sources"]
@@ -152,17 +153,20 @@ def prepare_night(path):
              "explain %s of their variance", complete.sum(), len(sources), basis.shape[1], reference.sum(),
              ", ".join(f"{100 * e:.0f}%" for e in explained))
 
+    # Brightness relative to the reference stars, for comparing nights (slow variables).
+    ensemble = np.nansum(flux[:, reference], axis=1)
     rows = []
     for j, source in enumerate(sources):
         if not complete[j]:
             continue
+        level = float(np.nanmedian(flux[:, j] / ensemble))
         f = clip_outliers(cotrend(flux[:, j] / np.nanmedian(flux[:, j]), basis))
         sigma = robust_p2p(f)
         spread = 1.4826 * np.nanmedian(np.abs(f - np.nanmedian(f)))
         rows.append({"index": j, "gaia_dr3": source["gaia_dr3"], "g_mag": source["g_mag"],
                      "role": source["role"], "ra": source["ra"], "dec": source["dec"],
                      "scatter": float(sigma), "variability": float(spread / sigma) if sigma > 0 else np.nan,
-                     "detrended": f})
+                     "level": level, "detrended": f})
     return t, rows
 
 

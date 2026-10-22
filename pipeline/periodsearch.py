@@ -28,8 +28,14 @@ would by eye:
 
 - every night's event is significant on its own (``EVENT_MIN_SNR``);
 - the nights' depths agree within ``DEPTH_AGREEMENT_SIGMA``;
-- at least one event is fully inside its night, with data before and
-  after, not cut off at the start or end where trends dominate.
+- at least one event is fully inside its night, with at least
+  ``BASELINE_H`` of data before and after it, not cut off at the start or
+  end where trends dominate.
+
+Stars whose brightness relative to the field changes between nights by
+more than ``LEVEL_CHANGE_SIGMA`` times the field's spread (slow variables,
+such as long-period variables, which look flat within a night) are
+excluded with the variables.
 
 Candidates passing all three are listed first (``vetted``). With a few nights the period is
 ambiguous: the events fix the spacing between transits, and any whole
@@ -55,6 +61,9 @@ DAILY_ALIAS_TOLERANCE = 0.02
 # Smooth variability left after removing each night's best box, on any night.
 MULTI_NIGHT_VARIABLE_RATIO = 2.0
 EVENT_MIN_SNR = 3.0
+BASELINE_H = 0.5
+LEVEL_CHANGE_SIGMA = 5.0
+LEVEL_CHANGE_MIN = 0.02
 DEPTH_AGREEMENT_SIGMA = 3.0
 RED_NOISE_TIMESCALE_H = 1.5
 
@@ -73,6 +82,20 @@ def variability_beyond_box(t, star):
     sigma = robust_p2p(f)
     spread = 1.4826 * np.nanmedian(np.abs(f - np.nanmedian(f)))
     return spread / sigma if sigma > 0 else np.inf
+
+
+def level_changes(stars, by_gaia):
+    """Stars whose brightness relative to the field changes between nights more than the field allows."""
+    stars = sorted(stars)
+    if len(by_gaia) < 2:
+        return set()
+    levels = np.array([[night[g]["level"] for g in stars] for night in by_gaia])  # nights x stars
+    ratio = np.log(levels / levels[0])
+    ratio -= np.median(ratio, axis=1, keepdims=True)  # nights differ in aperture, seeing, transparency
+    spread = 1.4826 * np.median(np.abs(ratio[1:]), axis=1, keepdims=True)
+    limit = np.maximum(LEVEL_CHANGE_SIGMA * spread, LEVEL_CHANGE_MIN)
+    changed = np.any(np.abs(ratio[1:]) > limit, axis=0)
+    return {g for g, c in zip(stars, changed) if c}
 
 
 def red_noise_factor(t, f, timescale_h=RED_NOISE_TIMESCALE_H):
@@ -127,7 +150,7 @@ def vet(r, nights, by_gaia, betas):
                 continue
             depth = float(np.median(f[~inside]) - np.mean(f[inside]))
             err = float(night[r["gaia_dr3"]]["scatter"] * beta / np.sqrt(inside.sum()))
-            edge = bool(tc - half < t.min() or tc + half > t.max())
+            edge = bool(tc - half - BASELINE_H / 24 < t.min() or tc + half + BASELINE_H / 24 > t.max())
             events.append({"t_mid": float(tc), "n_in": int(inside.sum()), "depth": depth, "depth_err": err,
                            "edge": edge})
     if len(events) < 2:
@@ -161,6 +184,9 @@ def period_search(paths, out_path=None, plot_dir=None, min_period=0.7, max_perio
     variable = {g for g in common
                 if any(variability_beyond_box(t, night[g]) > MULTI_NIGHT_VARIABLE_RATIO
                        for (t, _), night in zip(nights, by_gaia))}
+    slow = level_changes(common, by_gaia)
+    log.info("%d stars change brightness between nights (slow variables)", len(slow - variable))
+    variable |= slow
     stars = sorted(common - variable)
     log.info("%d stars in all %d nights; %d variable on some night, %d searched", len(common), len(paths),
              len(variable), len(stars))
