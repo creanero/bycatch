@@ -13,12 +13,12 @@ For each star:
    leading principal components of the reference stars' normalised light
    curves: transparency, extinction, colour and position effects). A
    transit on one star isn't shared, so it survives.
-3. Clip single-frame outliers (cosmic rays, satellites) against a running
+2. Clip single-frame outliers (cosmic rays, satellites) against a running
    median.
-4. Flag variable stars: smooth variability (robust standard deviation)
+3. Flag variable stars: smooth variability (robust standard deviation)
    far above the frame-to-frame scatter. They are listed separately, not
    ranked as transit candidates.
-5. Slide a box of each trial duration across the night. The depth is the
+4. Slide a box of each trial duration across the night. The depth is the
    median out of the box minus the median inside it. It is scored against
    the noise on that timescale: the scatter of box-length averages taken
    outside the box, which includes correlated ("red") noise that
@@ -127,14 +127,20 @@ def box_search(t, f, durations_h=DURATIONS_H, step_h=0.05, min_points=5):
     return best
 
 
-def search(path, top=12, plot_dir=None, out_path=None):
+def prepare_night(path):
+    """Cotrended, clipped light curves of every star measured in every used frame of one night.
+
+    Returns ``(t, rows)``: the used frames' BJD_TDB and, per star, a dict
+    with its identity, ``detrended`` flux (normalised to 1, NaN where
+    clipped), frame-to-frame ``scatter`` and ``variability`` (robust spread
+    over that scatter).
+    """
     data = store.read(path)
     frames, sources = data["frames"], data["sources"]
     t = _array(frames.get("bjd_tdb_date_obs", frames["bjd_tdb"]))
-    airmass = _array(frames["airmass"])
     used = np.array(frames["used"], dtype=bool)
     flux = np.stack([_array(s["flux"]) for s in sources], axis=1)[used]
-    t, airmass = t[used], airmass[used]
+    t = t[used]
 
     complete = np.all(np.isfinite(flux) & (flux > 0), axis=0)
     raw_scatter = np.array([robust_p2p(flux[:, j] / np.nanmedian(flux[:, j])) if complete[j] else np.nan
@@ -153,12 +159,18 @@ def search(path, top=12, plot_dir=None, out_path=None):
         f = clip_outliers(cotrend(flux[:, j] / np.nanmedian(flux[:, j]), basis))
         sigma = robust_p2p(f)
         spread = 1.4826 * np.nanmedian(np.abs(f - np.nanmedian(f)))
-        score, t_mid, dur, depth, n_in = box_search(t, f)
         rows.append({"index": j, "gaia_dr3": source["gaia_dr3"], "g_mag": source["g_mag"],
                      "role": source["role"], "ra": source["ra"], "dec": source["dec"],
                      "scatter": float(sigma), "variability": float(spread / sigma) if sigma > 0 else np.nan,
-                     "score": score, "t_mid": t_mid, "duration_h": dur,
-                     "depth": depth, "n_in": n_in, "detrended": f})
+                     "detrended": f})
+    return t, rows
+
+
+def search(path, top=12, plot_dir=None, out_path=None):
+    t, rows = prepare_night(path)
+    for r in rows:
+        score, t_mid, dur, depth, n_in = box_search(t, r["detrended"])
+        r.update(score=score, t_mid=t_mid, duration_h=dur, depth=depth, n_in=n_in)
 
     # A transit of a quiet star raises its spread only a little above its frame-to-frame
     # scatter; pulsators, contact binaries and slow variables raise it a lot.

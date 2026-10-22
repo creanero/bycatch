@@ -296,6 +296,37 @@ Archive outages seen: the NASA Exoplanet Archive returned HTTP 526 for over
 an hour, and Gaia gave intermittent 500s. Planet rows are cached in
 `~/bycatch-data/cache/planets/`; Gaia queries retry.
 
+Blind searches (no knowledge of the target):
+
+- `pipeline/search.py` (one night). On POTS-1 chip 3, night 54230, it
+  ranks POTS-1 9th of 764 (99th percentile), the only transit-shaped event
+  in the top 12.
+- `pipeline/periodsearch.py` (several nights, stars matched by Gaia ID,
+  BLS). With nights 54173 + 54230, POTS-1 is #1 of 486 multi-night
+  solutions at SNR 23.1; the next is 6.7. It passes strict vetting:
+  - each event significant on its own (2.87 ± 0.11% and 2.28 ± 0.22%);
+  - depths consistent;
+  - both events complete within their nights.
+
+  The period is ambiguous with two nights. The catalogue 3.16066 d is
+  among 76 aliases of the 56.894 d gap.
+
+What made the difference, in order:
+
+1. Cotrending on the field's principal components (not a single common
+   mode).
+2. Clipping single-frame outliers.
+3. Scoring against noise on the transit timescale, estimated from sliding
+   windows.
+4. Excluding variables by the spread left after removing the best box (a
+   deep transit on a short night otherwise looks variable).
+5. A field-median correlated-noise factor (a star's own factor is inflated
+   by its transit).
+6. Masking periods near n days and 1/n day (time-of-night systematics).
+7. Vetting per event.
+
+Remaining bias: weak candidates pile up near the 0.7 d minimum period.
+
 EXOTIC pitfalls found here, now fixed in exotic-private `main` (801067c).
 The bycatch workarounds are removed. The batched grid fix is also on `main`
 (0cba1cc), and the compute host runs a git clone of `main` (see
