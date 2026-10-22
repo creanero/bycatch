@@ -1,0 +1,18 @@
+{
+  "name": "POTS-1 field (OTSF-1A), WFI, night 54233",
+  "purpose": "Multi-night bycatch search of the POTS-1 field (Pre-OmegaTranS).",
+  "archive": "ESO",
+  "instrument": "WFI",
+  "prog_id": "079.A-9003(A)",
+  "object": "OTSF-1A",
+  "filter": "BB#RC/162_ESO844",
+  "night": 54233,
+  "known_planets": [
+    "POTS-1 b"
+  ],
+  "calibrations": {
+    "BIAS": false,
+    "FLAT,SKY": true,
+    "FLAT,SCREEN": true
+  }
+}
