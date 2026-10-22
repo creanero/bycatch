@@ -311,6 +311,29 @@ Blind searches (no knowledge of the target):
   The period is ambiguous with two nights. The catalogue 3.16066 d is
   among 76 aliases of the 56.894 d gap.
 
+**Whole POTS-1 field, both nights** (22 Oct 2026, overnight on cheetah):
+
+- Run with `run_pots_field.sh` on cheetah. Field-only `pipeline.wfi
+  extract --chip N` for the 7 other chips, about 11 min per chip on the
+  short night and 21 min on the long one, with 16 workers. Then
+  `periodsearch` per chip and `pipeline.collate`. Results are under
+  `~/bycatch-data/results/eso/wfi/pots_field/` (`field_candidates.json`,
+  `field_top8.png`).
+- About 5,900 stars searched on both nights.
+- POTS-1 is #1 field-wide (SNR 23.1; next 18.8). By eye it's the only
+  convincing transit. The next candidates are noise, trends or one-sided
+  events. The only one worth a second look is #5 (chip 2, G=14.8, Gaia
+  5851641466227710208), a weak 0.7% box on both nights.
+- 126 stars excluded as variable. 33 have a Gaia DR3 class (19 ECL, 6
+  DSCT/GDOR, 5 RS, 1 RR, among others). The other 93 are unclassified:
+  possible new variable-star bycatch.
+- Weaknesses to fix:
+  - "Complete" events should need ≥30 min of data on both sides (the #4
+    candidate's event starts at the night's first frame).
+  - Two Gaia LPVs slipped past the variable flag.
+  - Chip 8 is noisier than the rest, so noise should be judged per chip.
+  - Weak candidates pile up near the 0.7 d minimum period.
+
 What made the difference, in order:
 
 1. Cotrending on the field's principal components (not a single common
