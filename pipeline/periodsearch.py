@@ -26,11 +26,17 @@ the periodogram's best signal-to-noise, and only candidates with in-transit
 points on at least two nights count. Each candidate is then vetted, as you
 would by eye:
 
-- every night's event is significant on its own (``EVENT_MIN_SNR``);
-- the nights' depths agree within ``DEPTH_AGREEMENT_SIGMA``;
+- at least two events are significant on their own (``EVENT_MIN_SNR``),
+  and no predicted event shows the star clearly not dimming;
+- the events' depths agree within ``DEPTH_AGREEMENT_SIGMA``;
 - at least one event is fully inside its night, with at least
   ``BASELINE_H`` of data before and after it, not cut off at the start or
-  end where trends dominate.
+  end where trends dominate (``vetted``); at least two such complete
+  events make it ``vetted_strict``.
+
+With many nights a real planet has some partial or noisy events, so the
+checks count events rather than requiring every one to pass. With two
+nights the two readings are the same.
 
 Stars whose brightness relative to the field changes between nights by
 more than ``LEVEL_CHANGE_SIGMA`` times the field's spread (slow variables,
@@ -159,13 +165,12 @@ def vet(r, nights, by_gaia, betas):
     errs = np.array([e["depth_err"] for e in events])
     mean = np.sum(depths / errs ** 2) / np.sum(1 / errs ** 2)
     consistent = bool(np.all(np.abs(depths - mean) < DEPTH_AGREEMENT_SIGMA * errs))
-    significant = bool(np.all(depths / errs > EVENT_MIN_SNR))
-    complete = any(not e["edge"] for e in events)
-    all_complete = all(not e["edge"] for e in events)
-    vetted = significant and consistent and complete
+    snr = depths / errs
+    significant = bool(np.sum(snr > EVENT_MIN_SNR) >= 2 and not np.any(snr < -EVENT_MIN_SNR))
+    n_complete = sum(not e["edge"] for e in events)
+    vetted = significant and consistent and n_complete >= 1
     return {"events": events, "events_significant": significant, "depths_consistent": consistent,
-            "has_complete_event": complete, "all_events_complete": all_complete, "vetted": vetted,
-            "vetted_strict": vetted and all_complete}
+            "n_complete_events": n_complete, "vetted": vetted, "vetted_strict": vetted and n_complete >= 2}
 
 
 def aliases(transit_times, min_period, max_period):
@@ -236,7 +241,7 @@ def period_search(paths, out_path=None, plot_dir=None, min_period=0.7, max_perio
                "snr_percentiles": {p: float(np.percentile(snrs, p)) for p in (50, 90, 99)} if len(snrs) else {}}
     summary["n_vetted"] = sum(r["vetted"] for r in multi)
     summary["n_vetted_strict"] = sum(r["vetted_strict"] for r in multi)
-    log.info("%d of %d best solutions put transits on 2+ nights (%d pass vetting, %d with every event complete); "
+    log.info("%d of %d best solutions put transits on 2+ nights (%d pass vetting, %d with 2+ complete events); "
              "SNR median %.1f, 99th percentile %.1f", len(multi), len(results), summary["n_vetted"],
              summary["n_vetted_strict"],
              summary["snr_percentiles"].get(50, np.nan), summary["snr_percentiles"].get(99, np.nan))
